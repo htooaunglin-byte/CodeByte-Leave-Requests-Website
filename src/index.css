@@ -1,0 +1,290 @@
+@import "tailwindcss";
+
+html {
+  scroll-behavior: smooth;
+}
+
+/* Ensure smooth scrolling across all scrollable containers */
+.overflow-y-auto, .overflow-auto, [class*="overflow-y-"], [class*="overflow-x-"] {
+  scroll-behavior: smooth;
+  -webkit-overflow-scrolling: touch;
+}
+
+@variant dark (&:where(.dark, .dark *));
+
+
+/* Subtle task checklist animated strike-through style */
+.task-title-container {
+  position: relative;
+  display: inline-block;
+  transition: color 0.3s ease;
+}
+
+.task-strike-line {
+  position: absolute;
+  top: 50%;
+  left: 0;
+  height: 1.5px;
+  background-color: currentColor; /* Matches text color */
+  transform: translateY(-50%);
+  width: 0%;
+  transition: width 0.35s cubic-bezier(0.25, 1, 0.5, 1);
+  pointer-events: none;
+}
+
+.task-strike-line.active {
+  width: 100%;
+}
+
+/* ========================================================== */
+/* Premium Developer Dark Mode Theme (Obsidian & Metallic Glow) */
+/* ========================================================== */
+
+:root {
+  --progress-track: #e2e8f0;
+  --progress-fill: #4f46e5; /* Beautiful premium Indigo */
+}
+
+html.dark {
+  background-color: #090a0f !important; /* Premium deep metallic void */
+  color-scheme: dark;
+  --progress-track: #1e293b;
+  --progress-fill: #34d399; /* Vibrant emerald emerald-400 */
+}
+
+html.dark body {
+  background-color: #090a0f;
+  color: #f1f5f9;
+}
+
+/* Base container and card styling overrides */
+html.dark .bg-white {
+  background-color: #11131c !important; /* Sleek obsidian card background */
+  color: #f1f5f9 !important;
+  border-color: rgba(255, 255, 255, 0.06) !important;
+}
+
+html.dark .bg-slate-50 {
+  background-color: #171a26 !important; /* Premium metallic accent background */
+  color: #f1f5f9 !important;
+  border-color: rgba(255, 255, 255, 0.05) !important;
+}
+
+html.dark .bg-slate-50\/50 {
+  background-color: rgba(23, 26, 38, 0.5) !important;
+}
+
+html.dark .bg-slate-50\/50:hover,
+html.dark .hover\:bg-slate-50:hover {
+  background-color: #1e2233 !important; /* Slightly lighter hover */
+}
+
+html.dark .hover\:bg-slate-100:hover {
+  background-color: #24293e !important;
+}
+
+/* Border overrides */
+html.dark .border-slate-200,
+html.dark .border-slate-200\/60,
+html.dark .border-slate-100,
+html.dark .border-slate-200\/50,
+html.dark .border-slate-200\/40,
+html.dark .border-slate-150\/50,
+html.dark .border-dashed {
+  border-color: rgba(255, 255, 255, 0.06) !important;
+}
+
+html.dark .divide-slate-100 > :not([hidden]) ~ :not([hidden]),
+html.dark .divide-slate-200\/50 > :not([hidden]) ~ :not([hidden]) {
+  border-color: rgba(255, 255, 255, 0.06) !important;
+}
+
+/* Text coloring overrides */
+html.dark .text-slate-900,
+html.dark .text-slate-950,
+html.dark .text-slate-800 {
+  color: #f8fafc !important; /* Bright crisp slate text */
+}
+
+html.dark .text-slate-700,
+html.dark .text-slate-600,
+html.dark .text-slate-650 {
+  color: #e2e8f0 !important; /* Premium light secondary text */
+}
+
+html.dark .text-slate-500,
+html.dark .text-slate-400 {
+  color: #94a3b8 !important; /* Elegant slate muted text */
+}
+
+html.dark .text-slate-300 {
+  color: #cbd5e1 !important; /* Readable soft light slate gray text/icons */
+}
+
+/* Sidebar specific */
+html.dark aside {
+  background-color: #0b0c12 !important; /* Super dark siderail for depth mapping */
+  border-color: rgba(255, 255, 255, 0.05) !important;
+}
+
+/* Mobile top navigation header */
+html.dark .md\:hidden {
+  background-color: #0b0c12 !important;
+  border-color: rgba(255, 255, 255, 0.05) !important;
+}
+
+/* Table styling */
+html.dark table th {
+  background-color: #171a26 !important;
+  color: #94a3b8 !important;
+  border-color: rgba(255, 255, 255, 0.06) !important;
+}
+
+html.dark table tbody tr {
+  border-color: rgba(255, 255, 255, 0.04) !important;
+}
+
+html.dark table tbody tr:hover {
+  background-color: #171a26 !important;
+}
+
+/* Form input, select, and textarea styling */
+html.dark select,
+html.dark input,
+html.dark textarea {
+  background-color: #171a26 !important;
+  color: #f1f5f9 !important;
+  border-color: rgba(255, 255, 255, 0.08) !important;
+}
+
+html.dark select option {
+  background-color: #11131c !important;
+  color: #f1f5f9 !important;
+}
+
+/* Scrollbars */
+html.dark ::-webkit-scrollbar {
+  width: 6px;
+  height: 6px;
+}
+html.dark ::-webkit-scrollbar-track {
+  background: #0b0c12;
+}
+html.dark ::-webkit-scrollbar-thumb {
+  background: #24293e;
+  border-radius: 3px;
+}
+
+/* Popover menus, modals and drop-shadow lists */
+html.dark .shadow-xl {
+  background-color: #11131c !important;
+  border-color: rgba(255, 255, 255, 0.08) !important;
+  box-shadow: 0 20px 25px -5px rgba(0, 0, 0, 0.6), 0 10px 10px -5px rgba(0, 0, 0, 0.6) !important;
+}
+
+/* Page wrapper background overrides */
+html.dark .bg-\[\#F8F9FA\] {
+  background-color: #090a0f !important;
+}
+
+html.dark .bg-slate-100 {
+  background-color: #1e2233 !important;
+  color: #f1f5f9 !important;
+}
+
+/* Custom buttons toggle styling on dark mode */
+html.dark button.bg-slate-900,
+html.dark a.bg-slate-900,
+html.dark .btn-slate-900,
+html.dark [role="button"].bg-slate-900 {
+  background-color: #f8fafc !important;
+  color: #090a0f !important;
+}
+html.dark button.bg-slate-900:hover,
+html.dark a.bg-slate-900:hover,
+html.dark .btn-slate-900:hover,
+html.dark [role="button"].bg-slate-900:hover {
+  background-color: #e2e8f0 !important;
+}
+
+html.dark .text-slate-900:hover {
+  color: #f8fafc !important;
+}
+
+html.dark .bg-slate-900\/5 {
+  background-color: rgba(255, 255, 255, 0.04) !important;
+}
+
+/* Badges for status color blends in dark mode */
+html.dark .bg-emerald-50 {
+  background-color: rgba(16, 185, 129, 0.08) !important;
+  color: #34d399 !important;
+  border-color: rgba(16, 185, 129, 0.2) !important;
+}
+html.dark .bg-sky-50 {
+  background-color: rgba(14, 165, 233, 0.08) !important;
+  color: #38bdf8 !important;
+  border-color: rgba(14, 165, 233, 0.2) !important;
+}
+html.dark .bg-rose-50 {
+  background-color: rgba(244, 63, 94, 0.08) !important;
+  color: #fb7185 !important;
+  border-color: rgba(244, 63, 94, 0.2) !important;
+}
+html.dark .bg-indigo-50 {
+  background-color: rgba(99, 102, 241, 0.08) !important;
+  color: #818cf8 !important;
+  border-color: rgba(99, 102, 241, 0.2) !important;
+}
+html.dark .bg-amber-50 {
+  background-color: rgba(245, 158, 11, 0.08) !important;
+  color: #fbbf24 !important;
+  border-color: rgba(245, 158, 11, 0.2) !important;
+}
+html.dark .bg-orange-50 {
+  background-color: rgba(249, 115, 22, 0.08) !important;
+  color: #fb923c !important;
+  border-color: rgba(249, 115, 22, 0.2) !important;
+}
+
+/* Other subtle UI glow tweaks */
+html.dark .bg-emerald-500 {
+  box-shadow: 0 0 10px rgba(16, 185, 129, 0.3);
+}
+
+/* Gentle shadow pulse animation on hover for project cards */
+@keyframes shadow-pulse {
+  0% {
+    box-shadow: 0 4px 6px -1px rgba(0, 0, 0, 0.1), 0 2px 4px -2px rgba(0, 0, 0, 0.1);
+  }
+  50% {
+    box-shadow: 0 10px 20px -3px rgba(99, 102, 241, 0.25), 0 4px 8px -4px rgba(99, 102, 241, 0.25);
+  }
+  100% {
+    box-shadow: 0 4px 6px -1px rgba(0, 0, 0, 0.1), 0 2px 4px -2px rgba(0, 0, 0, 0.1);
+  }
+}
+
+@keyframes shadow-pulse-dark {
+  0% {
+    box-shadow: 0 4px 6px -1px rgba(0, 0, 0, 0.5), 0 2px 4px -2px rgba(0, 0, 0, 0.5);
+  }
+  50% {
+    box-shadow: 0 10px 20px -3px rgba(52, 211, 153, 0.3), 0 4px 8px -4px rgba(52, 211, 153, 0.3);
+  }
+  100% {
+    box-shadow: 0 4px 6px -1px rgba(0, 0, 0, 0.5), 0 2px 4px -2px rgba(0, 0, 0, 0.5);
+  }
+}
+
+.grid .group.cursor-pointer:hover,
+.grid .group.cursor-grab:hover {
+  animation: shadow-pulse 2s infinite ease-in-out;
+  border-color: rgba(99, 102, 241, 0.3) !important;
+}
+
+html.dark .grid .group.cursor-pointer:hover,
+html.dark .grid .group.cursor-grab:hover {
+  animation: shadow-pulse-dark 2s infinite ease-in-out;
+  border-color: rgba(52, 211, 153, 0.3) !important;
+}

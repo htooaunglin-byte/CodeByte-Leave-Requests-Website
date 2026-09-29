@@ -1,0 +1,26 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 128 128" width="128" height="128">
+  <defs>
+    <linearGradient id="bgGrad" x1="0%" y1="0%" x2="100%" y2="100%">
+      <stop offset="0%" stop-color="#4f46e5" />
+      <stop offset="100%" stop-color="#312e81" />
+    </linearGradient>
+  </defs>
+  <rect width="128" height="128" rx="28" fill="url(#bgGrad)" />
+  
+  <g fill="#ffffff">
+    <!-- Row 1: Left-Center Dumbbell Link -->
+    <rect x="38" y="34" width="28" height="12" rx="4" />
+    <circle cx="38" cy="40" r="10" />
+    <circle cx="66" cy="40" r="10" />
+    
+    <!-- Row 2: Center-Right Dumbbell Link (staggered & slightly overlapping) -->
+    <rect x="62" y="58" width="28" height="12" rx="4" />
+    <circle cx="62" cy="64" r="10" />
+    <circle cx="90" cy="64" r="10" />
+    
+    <!-- Row 3: Left-Center Dumbbell Link -->
+    <rect x="38" y="82" width="28" height="12" rx="4" />
+    <circle cx="38" cy="88" r="10" />
+    <circle cx="66" cy="88" r="10" />
+  </g>
+</svg>

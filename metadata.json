@@ -1,0 +1,6 @@
+{
+  "name": "Project Tracker",
+  "description": "A clean, modern single-page project management application to replace spreadsheet systems, integrated with Firebase Firestore.",
+  "requestFramePermissions": [],
+  "majorCapabilities": ["MAJOR_CAPABILITY_SERVER_SIDE_GEMINI_API"]
+}
