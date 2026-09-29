@@ -170,4 +170,31 @@ export function getWorkingDaysInMonth(
   return count * (isHalf ? 0.5 : 1.0);
 }
 
+/**
+ * Company executive & leadership ranking helper
+ * 1. Samson (top)
+ * 2. Ju Zaw (next in line)
+ * 3. Ye Htet Zaw (after that)
+ * 4. Carbon (after that)
+ * 100. Other team members
+ */
+export const getTeamMemberRank = (member: { name?: string; email?: string }): number => {
+  const name = (member.name || "").toLowerCase().trim();
+  const email = (member.email || "").toLowerCase().trim();
+
+  // 1. Samson (at the top)
+  if (name.includes("samson") || email.includes("samson")) return 1;
+
+  // 2. Ju Zaw (next in line)
+  if (name.includes("ju zaw") || name.includes("ju.zaw") || email.includes("ju.zaw") || email.includes("juzaw") || name.startsWith("ju ")) return 2;
+
+  // 3. Ye Htet Zaw (after that)
+  if (name.includes("ye htet") || name.includes("yehtet") || email.includes("yehtet") || email.includes("ye.htet")) return 3;
+
+  // 4. Carbon (after that)
+  if (name.includes("carbon") || email.includes("carbon")) return 4;
+
+  return 100;
+};
+
 

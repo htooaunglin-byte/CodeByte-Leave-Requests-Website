@@ -1,5 +1,5 @@
 import { useState, useEffect, useRef, FormEvent } from "react";
-import { LeaveRequest, LeaveType, LeaveAttachment, TeamMember, getDaysDifference, getMonthsInRange, getWorkingDaysInMonth } from "../types";
+import { LeaveRequest, LeaveType, LeaveAttachment, TeamMember, getDaysDifference, getMonthsInRange, getWorkingDaysInMonth, getTeamMemberRank } from "../types";
 import { leaveService } from "../firebase";
 import { getBurmeseHoliday, getBurmeseHolidaysInMonth, getBurmeseHolidaysInRange } from "../data/burmeseHolidays";
 import { motion } from "motion/react";
@@ -2085,11 +2085,18 @@ export default function LeaveRequests({
                 required
               >
                 <option value="">-- Choose Employee --</option>
-                {teamMembers.map((m) => (
-                  <option key={m.id} value={m.email}>
-                    {m.name} ({m.email})
-                  </option>
-                ))}
+                {[...teamMembers]
+                  .sort((a, b) => {
+                    const rankA = getTeamMemberRank(a);
+                    const rankB = getTeamMemberRank(b);
+                    if (rankA !== rankB) return rankA - rankB;
+                    return a.name.localeCompare(b.name);
+                  })
+                  .map((m) => (
+                    <option key={m.id} value={m.email}>
+                      {m.name} ({m.email})
+                    </option>
+                  ))}
               </select>
             </div>
 
@@ -3310,12 +3317,19 @@ export default function LeaveRequests({
                 </thead>
                 <tbody className="divide-y divide-slate-100 text-xs bg-white">
                   {(() => {
-                    const filteredMembers = teamMembers.filter(m => {
-                      const matchesSearch = m.name.toLowerCase().includes(statsSearch.toLowerCase()) || 
-                                           m.email.toLowerCase().includes(statsSearch.toLowerCase());
-                      const matchesEmployee = statsEmployee === "all" || m.email.toLowerCase().trim() === statsEmployee.toLowerCase().trim();
-                      return matchesSearch && matchesEmployee;
-                    });
+                    const filteredMembers = teamMembers
+                      .filter(m => {
+                        const matchesSearch = m.name.toLowerCase().includes(statsSearch.toLowerCase()) || 
+                                             m.email.toLowerCase().includes(statsSearch.toLowerCase());
+                        const matchesEmployee = statsEmployee === "all" || m.email.toLowerCase().trim() === statsEmployee.toLowerCase().trim();
+                        return matchesSearch && matchesEmployee;
+                      })
+                      .sort((a, b) => {
+                        const rankA = getTeamMemberRank(a);
+                        const rankB = getTeamMemberRank(b);
+                        if (rankA !== rankB) return rankA - rankB;
+                        return a.name.localeCompare(b.name);
+                      });
 
                     if (filteredMembers.length === 0) {
                       return (
@@ -3536,11 +3550,18 @@ export default function LeaveRequests({
                   className="w-full bg-white dark:bg-slate-800 border border-slate-200 dark:border-slate-700 text-slate-800 dark:text-slate-200 text-xs font-semibold px-2.5 py-1.5 rounded-lg focus:outline-none focus:ring-1 focus:ring-indigo-500 cursor-pointer"
                 >
                   <option value="all">All Employees ({teamMembers.length})</option>
-                  {teamMembers.map((m) => (
-                    <option key={m.id} value={m.email}>
-                      {m.name} ({m.email})
-                    </option>
-                  ))}
+                  {[...teamMembers]
+                    .sort((a, b) => {
+                      const rankA = getTeamMemberRank(a);
+                      const rankB = getTeamMemberRank(b);
+                      if (rankA !== rankB) return rankA - rankB;
+                      return a.name.localeCompare(b.name);
+                    })
+                    .map((m) => (
+                      <option key={m.id} value={m.email}>
+                        {m.name} ({m.email})
+                      </option>
+                    ))}
                 </select>
               </div>
 

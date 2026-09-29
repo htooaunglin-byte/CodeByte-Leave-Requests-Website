@@ -1,5 +1,5 @@
 import { useState, FormEvent } from "react";
-import { AdminUser, TeamMember } from "../types";
+import { AdminUser, TeamMember, getTeamMemberRank } from "../types";
 import { adminService } from "../firebase";
 import { 
   Shield, 
@@ -54,9 +54,21 @@ export default function Settings({
 
   // Filter team members who are not already admins
   const adminEmails = admins.map(a => a.email.toLowerCase().trim());
-  const availableMembers = teamMembers.filter(member => 
-    !adminEmails.includes(member.email.toLowerCase().trim())
-  );
+  const availableMembers = teamMembers
+    .filter(member => !adminEmails.includes(member.email.toLowerCase().trim()))
+    .sort((a, b) => {
+      const rankA = getTeamMemberRank(a);
+      const rankB = getTeamMemberRank(b);
+      if (rankA !== rankB) return rankA - rankB;
+      return a.name.localeCompare(b.name);
+    });
+
+  const sortedAdmins = [...admins].sort((a, b) => {
+    const rankA = getTeamMemberRank(a);
+    const rankB = getTeamMemberRank(b);
+    if (rankA !== rankB) return rankA - rankB;
+    return a.email.localeCompare(b.email);
+  });
 
   const handleAddAdminSubmit = async (e: FormEvent) => {
     e.preventDefault();
@@ -174,7 +186,7 @@ export default function Settings({
 
             {/* List of Admins */}
             <div className="divide-y divide-slate-100 dark:divide-white/5">
-              {admins.map((admin) => {
+              {sortedAdmins.map((admin) => {
                 const isAdminSelf = admin.email.toLowerCase() === currentUserEmail;
                 return (
                   <div key={admin.id} className="p-4 flex items-center justify-between gap-4 hover:bg-slate-50/50 dark:hover:bg-[#1e2233] transition bg-white dark:bg-[#171a26]">

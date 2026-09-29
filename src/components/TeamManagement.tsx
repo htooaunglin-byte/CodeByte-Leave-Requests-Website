@@ -1,5 +1,5 @@
 import { useState, FormEvent } from "react";
-import { TeamMember } from "../types";
+import { TeamMember, getTeamMemberRank } from "../types";
 import { Users, Plus, Edit2, Trash2, Search, X, Check, ShieldAlert, AlertTriangle } from "lucide-react";
 import { teamService } from "../firebase";
 import { motion } from "motion/react";
@@ -156,6 +156,12 @@ export default function TeamManagement({
   );
 
   const sortedMembers = [...filteredMembers].sort((a, b) => {
+    // 1. Executive hierarchy: Samson, Ju Zaw, Ye Htet Zaw, Carbon
+    const rankA = getTeamMemberRank(a);
+    const rankB = getTeamMemberRank(b);
+    if (rankA !== rankB) return rankA - rankB;
+
+    // 2. Role priority fallback
     const pA = getRolePriority(a.role);
     const pB = getRolePriority(b.role);
     if (pA !== pB) return pA - pB;
