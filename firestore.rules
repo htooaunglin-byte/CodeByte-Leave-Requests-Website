@@ -1,0 +1,100 @@
+rules_version = '2';
+service cloud.firestore {
+  match /databases/{database}/documents {
+    // Default deny safety net
+    match /{document=**} {
+      allow read, write: if false;
+    }
+
+    function isSignedIn() {
+      return request.auth != null && request.auth.token.email != null;
+    }
+
+    function userEmail() {
+      return request.auth.token.email.lower();
+    }
+
+    // Core CodeByte Admins + dynamic admins collection lookup
+    // Note: admin doc IDs follow email.lower().replace(/[^a-z0-9@.-]/g, '_')
+    function isAdmin() {
+      return isSignedIn() && (
+        userEmail() == 'htooaung.lin@code-byte.io' ||
+        userEmail() == 'ju.zaw@code-byte.io' ||
+        userEmail() == 'samson@code-byte.io' ||
+        userEmail() == 'yehtet.zaw@code-byte.io' ||
+        exists(/databases/$(database)/documents/admins/$(userEmail()))
+      );
+    }
+
+    // 1. Team Roster (/team/{memberId})
+    match /team/{memberId} {
+      allow read: if isSignedIn();
+      allow create, update, delete: if isAdmin();
+    }
+
+    // 2. Leave Requests (/leave_requests/{requestId})
+    match /leave_requests/{requestId} {
+      allow read: if isSignedIn();
+      allow create: if isSignedIn() && (
+        isAdmin() ||
+        request.resource.data.requestorEmail.lower() == userEmail()
+      );
+      allow update, delete: if isAdmin() || (
+        isSignedIn() &&
+        resource.data.requestorEmail.lower() == userEmail() &&
+        resource.data.status == 'Pending'
+      );
+    }
+
+    // 3. Administrators (/admins/{adminId})
+    match /admins/{adminId} {
+      allow read: if isSignedIn();
+      allow write: if isAdmin();
+    }
+
+    // 4. Company Assets (/assets/{assetId})
+    // Admins can view and manage all assets.
+    // Non-admin employees can ONLY read assets currently assigned to their email.
+    match /assets/{assetId} {
+      allow get, list: if isAdmin() || (
+        isSignedIn() &&
+        resource.data.assignedEmployeeEmail == userEmail()
+      );
+      allow create, update: if isAdmin() &&
+        request.resource.data.assetCode is string &&
+        request.resource.data.assetCode.size() > 0 &&
+        request.resource.data.assetCode.size() <= 64 &&
+        request.resource.data.assetName is string &&
+        request.resource.data.assetName.size() > 0 &&
+        request.resource.data.assetName.size() <= 200 &&
+        request.resource.data.category in ['Laptop', 'Monitor', 'Phone', 'Network Equipment', 'Other'] &&
+        request.resource.data.ownershipType in ['Company-owned', 'Rented'] &&
+        request.resource.data.status in ['Available', 'Assigned', 'Under Maintenance', 'Returned to Supplier', 'Retired'] &&
+        request.resource.data.condition in ['Good', 'Fair', 'Damaged'];
+      // Only allow permanent deletion by an Admin when the asset has no assignment history and is not assigned
+      allow delete: if isAdmin() &&
+        resource.data.status != 'Assigned' &&
+        resource.data.hasAssignmentHistory != true;
+    }
+
+    // 5. Asset Assignments History (/asset_assignments/{assignmentId})
+    // Admins can read and write all assignment records.
+    // Employees can read ONLY their own assignment records.
+    // Assignment history records cannot be deleted so history is preserved.
+    match /asset_assignments/{assignmentId} {
+      allow get, list: if isAdmin() || (
+        isSignedIn() &&
+        resource.data.employeeEmail == userEmail()
+      );
+      allow create, update: if isAdmin();
+      allow delete: if false;
+    }
+
+    // 6. Asset Activity Audit Logs (/asset_logs/{logId})
+    // Audit logs are append-only for admins and cannot be modified or deleted.
+    match /asset_logs/{logId} {
+      allow get, list, create: if isAdmin();
+      allow update, delete: if false;
+    }
+  }
+}

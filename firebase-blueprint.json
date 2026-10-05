@@ -1,0 +1,138 @@
+{
+  "entities": {
+    "TeamMember": {
+      "title": "TeamMember",
+      "description": "Whitelisted company employee record",
+      "type": "object",
+      "properties": {
+        "name": { "type": "string", "maxLength": 120 },
+        "email": { "type": "string", "maxLength": 200 },
+        "role": { "type": "string", "maxLength": 120 },
+        "status": { "type": "string", "enum": ["Active", "Deactivated"] }
+      },
+      "required": ["name", "email", "role"]
+    },
+    "LeaveRequest": {
+      "title": "LeaveRequest",
+      "description": "Employee leave request record",
+      "type": "object",
+      "properties": {
+        "requestorEmail": { "type": "string", "maxLength": 200 },
+        "requestorName": { "type": "string", "maxLength": 120 },
+        "leaveType": { "type": "string", "maxLength": 60 },
+        "startDate": { "type": "string", "maxLength": 20 },
+        "endDate": { "type": "string", "maxLength": 20 },
+        "reason": { "type": "string", "maxLength": 2000 },
+        "status": { "type": "string", "enum": ["Pending", "Approved", "Denied"] }
+      },
+      "required": ["requestorEmail", "requestorName", "leaveType", "startDate", "endDate", "status"]
+    },
+    "AdminUser": {
+      "title": "AdminUser",
+      "description": "Authorized administrator email entry",
+      "type": "object",
+      "properties": {
+        "email": { "type": "string", "maxLength": 200 }
+      },
+      "required": ["email"]
+    },
+    "CompanyAsset": {
+      "title": "CompanyAsset",
+      "description": "Company-owned or rented equipment record",
+      "type": "object",
+      "properties": {
+        "assetCode": { "type": "string", "maxLength": 64 },
+        "assetName": { "type": "string", "maxLength": 200 },
+        "category": {
+          "type": "string",
+          "enum": ["Laptop", "Monitor", "Phone", "Network Equipment", "Other"]
+        },
+        "brandModel": { "type": "string", "maxLength": 200 },
+        "serialNumber": { "type": "string", "maxLength": 120 },
+        "ownershipType": {
+          "type": "string",
+          "enum": ["Company-owned", "Rented"]
+        },
+        "accessories": { "type": "array" },
+        "status": {
+          "type": "string",
+          "enum": ["Available", "Assigned", "Under Maintenance", "Returned to Supplier", "Retired"]
+        },
+        "condition": {
+          "type": "string",
+          "enum": ["Good", "Fair", "Damaged"]
+        },
+        "location": { "type": "string", "maxLength": 200 },
+        "notes": { "type": "string", "maxLength": 2000 },
+        "supplier": { "type": "string", "maxLength": 200 },
+        "rentalStartDate": { "type": "string", "maxLength": 20 },
+        "rentalEndDate": { "type": "string", "maxLength": 20 },
+        "rentalCurrency": { "type": "string", "maxLength": 16 },
+        "rentalBillingPeriod": { "type": "string", "maxLength": 32 },
+        "activeAssignmentId": { "type": "string", "maxLength": 128 },
+        "assignedEmployeeId": { "type": "string", "maxLength": 128 },
+        "assignedEmployeeName": { "type": "string", "maxLength": 120 },
+        "assignedEmployeeEmail": { "type": "string", "maxLength": 200 }
+      },
+      "required": ["assetCode", "assetName", "category", "ownershipType", "status", "condition"]
+    },
+    "AssetAssignment": {
+      "title": "AssetAssignment",
+      "description": "Historical and active employee equipment assignment record",
+      "type": "object",
+      "properties": {
+        "assetId": { "type": "string", "maxLength": 128 },
+        "assetCode": { "type": "string", "maxLength": 64 },
+        "assetName": { "type": "string", "maxLength": 200 },
+        "employeeId": { "type": "string", "maxLength": 128 },
+        "employeeName": { "type": "string", "maxLength": 120 },
+        "employeeEmail": { "type": "string", "maxLength": 200 },
+        "status": { "type": "string", "enum": ["Active", "Returned"] },
+        "assignedDate": { "type": "string", "maxLength": 20 },
+        "conditionAtHandover": { "type": "string", "enum": ["Good", "Fair", "Damaged"] }
+      },
+      "required": ["assetId", "assetCode", "assetName", "employeeId", "employeeName", "status", "assignedDate", "conditionAtHandover"]
+    },
+    "AssetActivityLog": {
+      "title": "AssetActivityLog",
+      "description": "Audit log of asset creation, edits, assignments, returns, and retirements",
+      "type": "object",
+      "properties": {
+        "assetId": { "type": "string", "maxLength": 128 },
+        "assetCode": { "type": "string", "maxLength": 64 },
+        "assetName": { "type": "string", "maxLength": 200 },
+        "action": { "type": "string", "maxLength": 64 },
+        "summary": { "type": "string", "maxLength": 1000 },
+        "actorEmail": { "type": "string", "maxLength": 200 },
+        "actorName": { "type": "string", "maxLength": 120 }
+      },
+      "required": ["assetId", "assetCode", "assetName", "action", "summary", "actorEmail", "actorName"]
+    }
+  },
+  "firestore": {
+    "/team/{memberId}": {
+      "schema": { "$ref": "#/entities/TeamMember" },
+      "description": "Whitelisted company team members"
+    },
+    "/leave_requests/{requestId}": {
+      "schema": { "$ref": "#/entities/LeaveRequest" },
+      "description": "Company leave requests"
+    },
+    "/admins/{adminId}": {
+      "schema": { "$ref": "#/entities/AdminUser" },
+      "description": "Authorized portal administrators"
+    },
+    "/assets/{assetId}": {
+      "schema": { "$ref": "#/entities/CompanyAsset" },
+      "description": "Company-owned and rented hardware assets"
+    },
+    "/asset_assignments/{assignmentId}": {
+      "schema": { "$ref": "#/entities/AssetAssignment" },
+      "description": "Employee asset assignment and return history"
+    },
+    "/asset_logs/{logId}": {
+      "schema": { "$ref": "#/entities/AssetActivityLog" },
+      "description": "Audit trail for asset operations"
+    }
+  }
+}

@@ -35,7 +35,172 @@ export interface TeamMember {
   name: string;
   email: string;
   role: string;
+  status?: "Active" | "Deactivated";
   createdAt?: any;
+  updatedAt?: any;
+}
+
+export type AssetCategory = "Laptop" | "Monitor" | "Phone" | "Network Equipment" | "Other";
+export type AssetOwnership = "Company-owned" | "Rented";
+export type AssetStatus = "Available" | "Assigned" | "Under Maintenance" | "Returned to Supplier" | "Retired";
+export type AssetCondition = "Good" | "Fair" | "Damaged";
+export type RentalBillingPeriod = "Monthly" | "Quarterly" | "Yearly" | "One-time" | "";
+
+export interface CompanyAsset {
+  id: string;
+  assetCode: string; // Required & unique, e.g. CBC-16
+  assetName: string; // Required, e.g. Lenovo ThinkPad X1 Carbon
+  category: AssetCategory;
+  brandModel?: string;
+  serialNumber?: string;
+  ownershipType: AssetOwnership;
+  accessories: string[]; // e.g. ["Charger", "Laptop bag", "Mouse"]
+  status: AssetStatus;
+  condition: AssetCondition;
+  location?: string;
+  notes?: string;
+
+  // Rented asset fields (all optional)
+  supplier?: string;
+  rentalStartDate?: string; // YYYY-MM-DD
+  rentalEndDate?: string; // YYYY-MM-DD
+  rentalCost?: number | null;
+  rentalCurrency?: string;
+  rentalBillingPeriod?: RentalBillingPeriod;
+
+  // Current assignment snapshot (denormalized for fast display; synced atomically)
+  activeAssignmentId?: string | null;
+  assignedEmployeeId?: string | null;
+  assignedEmployeeName?: string | null;
+  assignedEmployeeEmail?: string | null;
+  assignedDate?: string | null;
+  assignedEmployeeDeactivated?: boolean;
+
+  // Supplier return metadata
+  returnedToSupplierDate?: string | null;
+  returnedToSupplierNotes?: string | null;
+
+  // History & Audit metadata
+  hasAssignmentHistory?: boolean;
+  createdByEmail?: string;
+  createdByName?: string;
+  createdAt?: any;
+  updatedByEmail?: string;
+  updatedByName?: string;
+  updatedAt?: any;
+}
+
+export interface AssetAssignment {
+  id: string;
+  assetId: string;
+  assetCode: string;
+  assetName: string;
+  category: AssetCategory;
+  employeeId: string;
+  employeeName: string;
+  employeeEmail: string;
+  employeeDeactivated?: boolean;
+  status: "Active" | "Returned";
+
+  // Handover fields
+  assignedDate: string; // YYYY-MM-DD
+  conditionAtHandover: AssetCondition;
+  accessoriesHandedOver: string[];
+  assignmentNotes?: string;
+  assignedByEmail: string;
+  assignedByName: string;
+
+  // Return fields
+  returnedDate?: string; // YYYY-MM-DD
+  conditionAtReturn?: AssetCondition;
+  accessoriesReturned?: string[];
+  missingOrDamagedItems?: string;
+  returnNotes?: string;
+  postReturnStatus?: "Available" | "Under Maintenance";
+  returnedByEmail?: string;
+  returnedByName?: string;
+
+  createdAt?: any;
+  updatedAt?: any;
+}
+
+export type AssetLogAction =
+  | "CREATED"
+  | "EDITED"
+  | "ASSIGNED"
+  | "RETURNED"
+  | "RETURNED_TO_SUPPLIER"
+  | "RETIRED"
+  | "STATUS_CHANGED";
+
+export interface AssetActivityLog {
+  id: string;
+  assetId: string;
+  assetCode: string;
+  assetName: string;
+  action: AssetLogAction;
+  summary: string;
+  actorEmail: string;
+  actorName: string;
+  targetEmployeeName?: string;
+  targetEmployeeEmail?: string;
+  createdAt?: any;
+}
+
+export interface RentalAlertInfo {
+  level: "none" | "ok" | "due-soon" | "due-today" | "overdue";
+  daysRemaining: number | null;
+  label: string;
+}
+
+export function getRentalAlertInfo(asset: Pick<CompanyAsset, "ownershipType" | "rentalEndDate" | "status">): RentalAlertInfo {
+  if (
+    asset.ownershipType !== "Rented" ||
+    !asset.rentalEndDate ||
+    asset.status === "Returned to Supplier" ||
+    asset.status === "Retired"
+  ) {
+    return { level: "none", daysRemaining: null, label: "" };
+  }
+
+  const parts = asset.rentalEndDate.split("-").map(Number);
+  if (parts.length < 3 || isNaN(parts[0]) || isNaN(parts[1]) || isNaN(parts[2])) {
+    return { level: "none", daysRemaining: null, label: "" };
+  }
+
+  const now = new Date();
+  const todayUtc = Date.UTC(now.getFullYear(), now.getMonth(), now.getDate());
+  const endUtc = Date.UTC(parts[0], parts[1] - 1, parts[2]);
+  const diffDays = Math.round((endUtc - todayUtc) / (1000 * 60 * 60 * 24));
+
+  if (diffDays < 0) {
+    const overdueDays = Math.abs(diffDays);
+    return {
+      level: "overdue",
+      daysRemaining: diffDays,
+      label: `Overdue by ${overdueDays} ${overdueDays === 1 ? "day" : "days"}`
+    };
+  }
+  if (diffDays === 0) {
+    return {
+      level: "due-today",
+      daysRemaining: 0,
+      label: "Due today"
+    };
+  }
+  if (diffDays <= 30) {
+    return {
+      level: "due-soon",
+      daysRemaining: diffDays,
+      label: `Due in ${diffDays} ${diffDays === 1 ? "day" : "days"}`
+    };
+  }
+
+  return {
+    level: "ok",
+    daysRemaining: diffDays,
+    label: `Due in ${diffDays}d`
+  };
 }
 
 export type LeaveType = "Annual Leave" | "Casual Leave" | "Urgent Leave" | "Medical Leave" | "Unpaid Leave";

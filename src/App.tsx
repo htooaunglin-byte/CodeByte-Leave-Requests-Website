@@ -15,15 +15,28 @@ import {
   Calendar,
   Bell,
   Briefcase,
+  Laptop,
   Settings as SettingsIcon
 } from "lucide-react";
-import { teamService, auth, db, leaveService, adminService } from "./firebase";
+import { teamService, auth, db, leaveService, adminService, assetService } from "./firebase";
 import { signOut } from "firebase/auth";
-import { TeamMember, LeaveRequest, AdminUser, LeaveType, getDaysDifference, formatWithDayOfWeek } from "./types";
+import {
+  TeamMember,
+  LeaveRequest,
+  AdminUser,
+  CompanyAsset,
+  AssetAssignment,
+  AssetActivityLog,
+  AssetCondition,
+  getDaysDifference,
+  formatWithDayOfWeek,
+  getRentalAlertInfo,
+} from "./types";
 import Logo from "./components/Logo";
 import Login from "./components/Login";
 import TeamManagement from "./components/TeamManagement";
 import LeaveRequests from "./components/LeaveRequests";
+import CompanyAssets from "./components/CompanyAssets";
 import Settings from "./components/Settings";
 
 const formatDateWithDayOfWeek = (dateStr: string) => {
@@ -44,7 +57,13 @@ const formatDateWithDayOfWeek = (dateStr: string) => {
   }
 };
 
-export type ViewType = "leave-requests" | "team-management" | "settings";
+export type ViewType = "leave-requests" | "company-assets" | "team-management" | "settings";
+
+const FAKE_DEMO_EMAILS = new Set([
+  "sarah.chen@code-byte.io",
+  "david.miller@code-byte.io",
+  "emma.watson@code-byte.io",
+]);
 
 export default function App() {
   // Authentication State
@@ -53,17 +72,21 @@ export default function App() {
     return saved ? JSON.parse(saved) : null;
   });
 
-  // Navigation & View State - Pure Leave Portal
+  // Navigation & View State
   const [currentView, setCurrentView] = useState<ViewType>("leave-requests");
   
   // Data States
   const [teamMembers, setTeamMembers] = useState<TeamMember[]>([]);
   const [leaveRequests, setLeaveRequests] = useState<LeaveRequest[]>([]);
   const [admins, setAdmins] = useState<AdminUser[]>([]);
+  const [assets, setAssets] = useState<CompanyAsset[]>([]);
+  const [assetAssignments, setAssetAssignments] = useState<AssetAssignment[]>([]);
+  const [assetLogs, setAssetLogs] = useState<AssetActivityLog[]>([]);
   const prevLeaveRequestsRef = useRef<LeaveRequest[]>([]);
   const isFirstLeaveLoadRef = useRef<boolean>(true);
   
   const [loadingLeaves, setLoadingLeaves] = useState<boolean>(true);
+  const [loadingAssets, setLoadingAssets] = useState<boolean>(true);
   
   // Connection Status (Firestore Live vs. LocalStorage Fallback)
   const [isLive, setIsLive] = useState<boolean>(false);
@@ -225,21 +248,19 @@ export default function App() {
     };
   }, [isLive]);
 
-  // Subscribe to Team Members
+  // Subscribe to Team Members (never auto-seed random fake names)
   const loadOfflineTeam = () => {
     try {
       const stored = localStorage.getItem("codebyte_fallback_team");
       if (stored) {
-        setTeamMembers(JSON.parse(stored));
+        const parsed: TeamMember[] = JSON.parse(stored);
+        const cleaned = parsed.filter(
+          (m) => !FAKE_DEMO_EMAILS.has((m.email || "").toLowerCase().trim())
+        );
+        setTeamMembers(cleaned);
+        localStorage.setItem("codebyte_fallback_team", JSON.stringify(cleaned));
       } else {
-        const defaultTeam: TeamMember[] = [
-          { id: "tm-1", name: "Henry @ Htoo Aung Lin", email: "htooaung.lin@code-byte.io", role: "Cybersecurity Engineer" },
-          { id: "tm-2", name: "Sarah Chen", email: "sarah.chen@code-byte.io", role: "Product Manager" },
-          { id: "tm-3", name: "David Miller", email: "david.miller@code-byte.io", role: "Lead Architect" },
-          { id: "tm-4", name: "Emma Watson", email: "emma.watson@code-byte.io", role: "Frontend Engineer" }
-        ];
-        localStorage.setItem("codebyte_fallback_team", JSON.stringify(defaultTeam));
-        setTeamMembers(defaultTeam);
+        setTeamMembers([]);
       }
     } catch (e) {
       console.error(e);
@@ -259,29 +280,16 @@ export default function App() {
       unsubscribe = teamService.subscribeTeam(
         async (fetchedTeam) => {
           clearTimeout(timeoutId);
-          setTeamMembers(fetchedTeam);
+          const cleanedTeam = fetchedTeam.filter(
+            (m) => !FAKE_DEMO_EMAILS.has((m.email || "").toLowerCase().trim())
+          );
+          setTeamMembers(cleanedTeam);
           setIsLive(true);
           setDbError(null);
-
-          if (fetchedTeam.length === 0) {
-            const seeds = [
-              { name: "Henry @ Htoo Aung Lin", email: "htooaung.lin@code-byte.io", role: "Cybersecurity Engineer" },
-              { name: "Sarah Chen", email: "sarah.chen@code-byte.io", role: "Product Manager" },
-              { name: "David Miller", email: "david.miller@code-byte.io", role: "Lead Architect" },
-              { name: "Emma Watson", email: "emma.watson@code-byte.io", role: "Frontend Engineer" }
-            ];
-            for (const s of seeds) {
-              const alreadyExists = fetchedTeam.some(
-                (m) => m.email.toLowerCase() === s.email.toLowerCase()
-              );
-              if (!alreadyExists) {
-                try {
-                  await teamService.addTeamMember(s);
-                } catch (e) {
-                  console.error("Error seeding team member:", e);
-                }
-              }
-            }
+          try {
+            localStorage.setItem("codebyte_fallback_team", JSON.stringify(cleanedTeam));
+          } catch (e) {
+            console.error(e);
           }
         },
         (error) => {
@@ -302,7 +310,7 @@ export default function App() {
     };
   }, []);
 
-  // Subscribe to Leave Requests
+  // Subscribe to Leave Requests (without fake sample leaves)
   useEffect(() => {
     let unsubscribe = () => {};
     let timeoutId: any;
@@ -311,23 +319,15 @@ export default function App() {
       try {
         const stored = localStorage.getItem("codebyte_fallback_leave_requests");
         if (stored) {
-          setLeaveRequests(JSON.parse(stored));
+          const parsed: LeaveRequest[] = JSON.parse(stored);
+          const cleaned = parsed.filter(
+            (r) =>
+              r.id !== "lr-sample-1" &&
+              !FAKE_DEMO_EMAILS.has((r.requestorEmail || "").toLowerCase().trim())
+          );
+          setLeaveRequests(cleaned);
         } else {
-          const defaultRequests: LeaveRequest[] = [
-            {
-              id: "lr-sample-1",
-              requestorEmail: "sarah.chen@code-byte.io",
-              requestorName: "Sarah Chen",
-              leaveType: "Annual Leave",
-              startDate: "2026-08-10",
-              endDate: "2026-08-14",
-              reason: "Annual family trip",
-              status: "Approved",
-              createdAt: new Date().toISOString()
-            }
-          ];
-          localStorage.setItem("codebyte_fallback_leave_requests", JSON.stringify(defaultRequests));
-          setLeaveRequests(defaultRequests);
+          setLeaveRequests([]);
         }
       } catch (e) {
         console.error("Error reading offline leaves:", e);
@@ -395,6 +395,64 @@ export default function App() {
     };
   }, [isLive, user?.email]);
 
+  // Subscribe to Company Assets, Assignments & Audit Logs
+  useEffect(() => {
+    if (!user?.email) {
+      setAssets([]);
+      setAssetAssignments([]);
+      setAssetLogs([]);
+      setLoadingAssets(false);
+      return;
+    }
+
+    if (!db) {
+      setLoadingAssets(false);
+      return;
+    }
+
+    setLoadingAssets(true);
+
+    const unsubAssets = assetService.subscribeAssets(
+      isAdmin,
+      user.email,
+      (fetchedAssets) => {
+        setAssets(fetchedAssets);
+        setLoadingAssets(false);
+      },
+      (err) => {
+        console.warn("Assets subscription error:", err);
+        setLoadingAssets(false);
+      }
+    );
+
+    const unsubAssignments = assetService.subscribeAssignments(
+      isAdmin,
+      user.email,
+      (fetchedAssignments) => {
+        setAssetAssignments(fetchedAssignments);
+      },
+      (err) => {
+        console.warn("Asset assignments subscription error:", err);
+      }
+    );
+
+    const unsubLogs = assetService.subscribeAssetLogs(
+      isAdmin,
+      (fetchedLogs) => {
+        setAssetLogs(fetchedLogs);
+      },
+      (err) => {
+        console.warn("Asset logs subscription error:", err);
+      }
+    );
+
+    return () => {
+      unsubAssets();
+      unsubAssignments();
+      unsubLogs();
+    };
+  }, [isAdmin, user?.email]);
+
   // Auth actions
   const handleLoginSuccess = (email: string, name: string) => {
     const u = { email, name };
@@ -434,8 +492,16 @@ export default function App() {
   };
 
   const handleUpdateTeamMember = async (id: string, updates: Partial<Omit<TeamMember, "id" | "createdAt">>) => {
+    const existing = teamMembers.find((m) => m.id === id);
     if (isLive && db) {
       await teamService.updateTeamMember(id, updates);
+      if (updates.status && existing) {
+        await assetService.flagEmployeeAssetsDeactivated(
+          id,
+          updates.email || existing.email,
+          updates.status === "Deactivated"
+        );
+      }
     } else {
       const updated = teamMembers.map((m) => (m.id === id ? { ...m, ...updates } : m));
       setTeamMembers(updated);
@@ -445,7 +511,11 @@ export default function App() {
   };
 
   const handleDeleteTeamMember = async (id: string) => {
+    const existing = teamMembers.find((m) => m.id === id);
     if (isLive && db) {
+      if (existing) {
+        await assetService.flagEmployeeAssetsDeactivated(id, existing.email, true);
+      }
       await teamService.deleteTeamMember(id);
     } else {
       const updated = teamMembers.filter((m) => m.id !== id);
@@ -453,6 +523,71 @@ export default function App() {
       localStorage.setItem("codebyte_fallback_team", JSON.stringify(updated));
     }
     showToast(`Team member removed.`, "success");
+  };
+
+  // Company Assets Handlers
+  const handleCreateAsset = async (payload: Omit<CompanyAsset, "id" | "createdAt" | "updatedAt">) => {
+    if (!user) return;
+    await assetService.createAsset(payload, user);
+    showToast(`Asset "${payload.assetCode}" created successfully.`, "success");
+  };
+
+  const handleUpdateAsset = async (
+    assetId: string,
+    updates: Partial<Omit<CompanyAsset, "id" | "createdAt">>
+  ) => {
+    if (!user) return;
+    await assetService.updateAsset(assetId, updates, user);
+    showToast(`Asset updated successfully.`, "success");
+  };
+
+  const handleAssignAsset = async (params: {
+    assetId: string;
+    employee: TeamMember;
+    assignedDate: string;
+    conditionAtHandover: AssetCondition;
+    accessoriesHandedOver: string[];
+    assignmentNotes?: string;
+  }) => {
+    if (!user) return;
+    await assetService.assignAsset(params, user);
+    showToast(`Asset assigned to ${params.employee.name}.`, "success");
+  };
+
+  const handleReturnAsset = async (params: {
+    assetId: string;
+    returnedDate: string;
+    conditionAtReturn: AssetCondition;
+    accessoriesReturned: string[];
+    missingOrDamagedItems?: string;
+    returnNotes?: string;
+    postReturnStatus: "Available" | "Under Maintenance";
+  }) => {
+    if (!user) return;
+    await assetService.returnAsset(params, user);
+    showToast(`Asset return recorded (${params.postReturnStatus}).`, "success");
+  };
+
+  const handleReturnToSupplier = async (params: {
+    assetId: string;
+    returnedToSupplierDate: string;
+    returnedToSupplierNotes?: string;
+  }) => {
+    if (!user) return;
+    await assetService.returnToSupplier(params, user);
+    showToast(`Rented asset marked as Returned to Supplier.`, "success");
+  };
+
+  const handleRetireAsset = async (assetId: string, reason: string) => {
+    if (!user) return;
+    await assetService.retireAsset(assetId, reason, user);
+    showToast(`Asset retired from active inventory.`, "info");
+  };
+
+  const handleDeleteAsset = async (assetId: string) => {
+    if (!user) return;
+    await assetService.deleteAsset(assetId, user.email);
+    showToast(`Asset permanently deleted.`, "success");
   };
 
   // Notifications Builder
@@ -938,7 +1073,7 @@ export default function App() {
             {renderNotificationBell(true)}
           </div>
 
-          {/* Navigation Links - Leave Requests Portal Only */}
+          {/* Navigation Links */}
           <nav className="space-y-1.5">
             {/* 1. Leave Requests */}
             <button
@@ -963,7 +1098,43 @@ export default function App() {
               )}
             </button>
 
-            {/* 2. Team Management */}
+            {/* 2. Company Assets */}
+            <button
+              onClick={() => {
+                setCurrentView("company-assets");
+                setIsSidebarOpen(false);
+              }}
+              className={`w-full flex items-center justify-between px-3.5 py-2.5 rounded-xl text-sm font-semibold transition cursor-pointer ${
+                currentView === "company-assets" 
+                  ? "bg-slate-900 text-white dark:bg-indigo-600 dark:text-white shadow-xs font-bold" 
+                  : "text-slate-650 dark:text-slate-300 hover:bg-slate-100 dark:hover:bg-white/5"
+              }`}
+            >
+              <div className="flex items-center gap-3">
+                <Laptop className="w-4.5 h-4.5" />
+                <span>Company Assets</span>
+              </div>
+              {(() => {
+                const alertCount = assets.filter((a) => {
+                  const info = getRentalAlertInfo(a);
+                  return (
+                    info.level === "overdue" ||
+                    info.level === "due-today" ||
+                    info.level === "due-soon"
+                  );
+                }).length;
+                if (isAdmin && alertCount > 0) {
+                  return (
+                    <span className="bg-amber-500 text-white text-[10px] font-mono font-black px-2 py-0.5 rounded-full shadow-2xs">
+                      {alertCount} Due
+                    </span>
+                  );
+                }
+                return null;
+              })()}
+            </button>
+
+            {/* 3. Team Management */}
             <button
               onClick={() => {
                 setCurrentView("team-management");
@@ -979,7 +1150,7 @@ export default function App() {
               <span>Team Management</span>
             </button>
 
-            {/* 3. Settings */}
+            {/* 4. Settings */}
             <button
               onClick={() => {
                 setCurrentView("settings");
@@ -1065,12 +1236,37 @@ export default function App() {
           />
         )}
 
+        {currentView === "company-assets" && (
+          <CompanyAssets
+            user={user}
+            isAdmin={isAdmin}
+            isLive={isLive}
+            assets={assets}
+            assignments={assetAssignments}
+            assetLogs={assetLogs}
+            teamMembers={teamMembers}
+            loadingAssets={loadingAssets}
+            onCreateAsset={handleCreateAsset}
+            onUpdateAsset={handleUpdateAsset}
+            onAssignAsset={handleAssignAsset}
+            onReturnAsset={handleReturnAsset}
+            onReturnToSupplier={handleReturnToSupplier}
+            onRetireAsset={handleRetireAsset}
+            onDeleteAsset={handleDeleteAsset}
+          />
+        )}
+
         {currentView === "team-management" && (
           <TeamManagement 
+            user={user}
             members={teamMembers}
+            assets={assets}
+            assignments={assetAssignments}
             onAddMember={handleAddTeamMember}
             onUpdateMember={handleUpdateTeamMember}
             onDeleteMember={handleDeleteTeamMember}
+            onAssignAsset={handleAssignAsset}
+            onReturnAsset={handleReturnAsset}
             isLive={isLive}
             isAdmin={isAdmin}
           />
