@@ -1098,7 +1098,23 @@ export default function App() {
               )}
             </button>
 
-            {/* 2. Company Assets */}
+            {/* 2. Team Management */}
+            <button
+              onClick={() => {
+                setCurrentView("team-management");
+                setIsSidebarOpen(false);
+              }}
+              className={`w-full flex items-center gap-3 px-3.5 py-2.5 rounded-xl text-sm font-semibold transition cursor-pointer ${
+                currentView === "team-management" 
+                  ? "bg-slate-900 text-white dark:bg-indigo-600 dark:text-white shadow-xs font-bold" 
+                  : "text-slate-650 dark:text-slate-300 hover:bg-slate-100 dark:hover:bg-white/5"
+              }`}
+            >
+              <Users className="w-4.5 h-4.5" />
+              <span>Team Management</span>
+            </button>
+
+            {/* 3. Company Assets */}
             <button
               onClick={() => {
                 setCurrentView("company-assets");
@@ -1132,22 +1148,6 @@ export default function App() {
                 }
                 return null;
               })()}
-            </button>
-
-            {/* 3. Team Management */}
-            <button
-              onClick={() => {
-                setCurrentView("team-management");
-                setIsSidebarOpen(false);
-              }}
-              className={`w-full flex items-center gap-3 px-3.5 py-2.5 rounded-xl text-sm font-semibold transition cursor-pointer ${
-                currentView === "team-management" 
-                  ? "bg-slate-900 text-white dark:bg-indigo-600 dark:text-white shadow-xs font-bold" 
-                  : "text-slate-650 dark:text-slate-300 hover:bg-slate-100 dark:hover:bg-white/5"
-              }`}
-            >
-              <Users className="w-4.5 h-4.5" />
-              <span>Team Management</span>
             </button>
 
             {/* 4. Settings */}
