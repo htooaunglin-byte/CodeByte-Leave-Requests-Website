@@ -74,6 +74,20 @@ export default function App() {
 
   // Navigation & View State
   const [currentView, setCurrentView] = useState<ViewType>("leave-requests");
+  const [focusedAssetId, setFocusedAssetId] = useState<string | null>(null);
+  const [focusedMemberId, setFocusedMemberId] = useState<string | null>(null);
+
+  const handleNavigateToAsset = (assetId: string) => {
+    setFocusedAssetId(assetId);
+    setCurrentView("company-assets");
+    setIsSidebarOpen(false);
+  };
+
+  const handleNavigateToEmployee = (memberId: string) => {
+    setFocusedMemberId(memberId);
+    setCurrentView("team-management");
+    setIsSidebarOpen(false);
+  };
   
   // Data States
   const [teamMembers, setTeamMembers] = useState<TeamMember[]>([]);
@@ -1253,6 +1267,9 @@ export default function App() {
             onReturnToSupplier={handleReturnToSupplier}
             onRetireAsset={handleRetireAsset}
             onDeleteAsset={handleDeleteAsset}
+            focusedAssetId={focusedAssetId}
+            onClearFocusedAsset={() => setFocusedAssetId(null)}
+            onNavigateToEmployee={handleNavigateToEmployee}
           />
         )}
 
@@ -1269,6 +1286,9 @@ export default function App() {
             onReturnAsset={handleReturnAsset}
             isLive={isLive}
             isAdmin={isAdmin}
+            focusedMemberId={focusedMemberId}
+            onClearFocusedMember={() => setFocusedMemberId(null)}
+            onNavigateToAsset={handleNavigateToAsset}
           />
         )}
 

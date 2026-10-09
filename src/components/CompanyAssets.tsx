@@ -1,4 +1,4 @@
-import { useState, useMemo } from "react";
+import { useState, useEffect, useMemo } from "react";
 import {
   CompanyAsset,
   AssetAssignment,
@@ -37,6 +37,8 @@ import {
   MapPin,
   Hash,
   Calendar,
+  Users,
+  ExternalLink,
 } from "lucide-react";
 import {
   AssetFormModal,
@@ -81,6 +83,9 @@ interface CompanyAssetsProps {
   }) => Promise<void>;
   onRetireAsset: (assetId: string, reason: string) => Promise<void>;
   onDeleteAsset: (assetId: string) => Promise<void>;
+  focusedAssetId?: string | null;
+  onClearFocusedAsset?: () => void;
+  onNavigateToEmployee?: (memberId: string) => void;
 }
 
 function getCategoryIcon(category: AssetCategory) {
@@ -130,6 +135,9 @@ export default function CompanyAssets({
   onReturnToSupplier,
   onRetireAsset,
   onDeleteAsset,
+  focusedAssetId = null,
+  onClearFocusedAsset,
+  onNavigateToEmployee,
 }: CompanyAssetsProps) {
   // Search and Filter States
   const [search, setSearch] = useState("");
@@ -141,6 +149,52 @@ export default function CompanyAssets({
   // Selected Asset for Details Panel
   const [selectedAssetId, setSelectedAssetId] = useState<string | null>(null);
   const [detailsTab, setDetailsTab] = useState<"overview" | "history" | "logs">("overview");
+
+  useEffect(() => {
+    if (focusedAssetId) {
+      setSelectedAssetId(focusedAssetId);
+      setDetailsTab("overview");
+      onClearFocusedAsset?.();
+    }
+  }, [focusedAssetId, onClearFocusedAsset]);
+
+  // Helper to resolve a TeamMember from assignment info (if clickable for current user)
+  const resolveLinkedEmployee = (
+    employeeId?: string | null,
+    employeeEmail?: string | null,
+    employeeName?: string | null
+  ): TeamMember | undefined => {
+    const member = teamMembers.find((m) => {
+      if (employeeId && m.id === employeeId) return true;
+      if (
+        employeeEmail &&
+        !employeeEmail.endsWith("@noemail.local") &&
+        m.email.toLowerCase().trim() === employeeEmail.toLowerCase().trim()
+      ) {
+        return true;
+      }
+      if (
+        employeeName &&
+        m.name.toLowerCase().trim() === employeeName.toLowerCase().trim()
+      ) {
+        return true;
+      }
+      return false;
+    });
+    if (!member) return undefined;
+    if (isAdmin) return member;
+    const currentEmail = (user?.email || "").toLowerCase().trim();
+    const currentName = (user?.name || "").toLowerCase().trim();
+    const mEmail = (member.email || "").toLowerCase().trim();
+    const mName = (member.name || "").toLowerCase().trim();
+    if (
+      (currentEmail && !mEmail.endsWith("@noemail.local") && mEmail === currentEmail) ||
+      (currentName && mName === currentName)
+    ) {
+      return member;
+    }
+    return undefined;
+  };
 
   // Action Modals State
   const [isAssetFormOpen, setIsAssetFormOpen] = useState(false);
@@ -711,7 +765,29 @@ export default function CompanyAssets({
                         {asset.status === "Assigned" && asset.assignedEmployeeName ? (
                           <div>
                             <div className="font-semibold text-slate-900 dark:text-white text-xs flex items-center gap-1.5">
-                              <span>{asset.assignedEmployeeName}</span>
+                              {(() => {
+                                const linkedMember = resolveLinkedEmployee(
+                                  asset.assignedEmployeeId,
+                                  asset.assignedEmployeeEmail,
+                                  asset.assignedEmployeeName
+                                );
+                                if (linkedMember && onNavigateToEmployee) {
+                                  return (
+                                    <button
+                                      type="button"
+                                      onClick={(e) => {
+                                        e.stopPropagation();
+                                        onNavigateToEmployee(linkedMember.id);
+                                      }}
+                                      className="inline-flex items-center gap-1 text-indigo-600 dark:text-indigo-400 hover:text-indigo-800 dark:hover:text-indigo-300 hover:underline font-semibold cursor-pointer text-left transition"
+                                      title={`Open ${asset.assignedEmployeeName}'s profile in Team Management`}
+                                    >
+                                      <span>{asset.assignedEmployeeName}</span>
+                                    </button>
+                                  );
+                                }
+                                return <span>{asset.assignedEmployeeName}</span>;
+                              })()}
                               {asset.assignedEmployeeDeactivated && (
                                 <span className="text-[10px] font-bold text-rose-600 dark:text-rose-400">
                                   (Deactivated)
@@ -1039,21 +1115,74 @@ export default function CompanyAssets({
                       Current Assignment
                     </h3>
                     {selectedAsset.status === "Assigned" && selectedAsset.assignedEmployeeName ? (
-                      <div className="p-4 rounded-xl border border-indigo-200/80 dark:border-indigo-800/60 bg-indigo-50/40 dark:bg-indigo-950/20 space-y-2">
-                        <div className="flex items-center justify-between">
-                          <div className="font-bold text-sm text-slate-900 dark:text-white">
-                            {selectedAsset.assignedEmployeeName}
+                      <div className="p-4 rounded-xl border border-indigo-200/80 dark:border-indigo-800/60 bg-indigo-50/40 dark:bg-indigo-950/20 space-y-2.5">
+                        <div className="flex items-start justify-between gap-3">
+                          <div>
+                            {(() => {
+                              const linkedMember = resolveLinkedEmployee(
+                                selectedAsset.assignedEmployeeId,
+                                selectedAsset.assignedEmployeeEmail,
+                                selectedAsset.assignedEmployeeName
+                              );
+                              if (linkedMember && onNavigateToEmployee) {
+                                return (
+                                  <button
+                                    type="button"
+                                    onClick={() => {
+                                      setSelectedAssetId(null);
+                                      onNavigateToEmployee(linkedMember.id);
+                                    }}
+                                    className="font-bold text-sm text-indigo-600 dark:text-indigo-400 hover:text-indigo-800 dark:hover:text-indigo-300 hover:underline inline-flex items-center gap-1.5 cursor-pointer text-left transition"
+                                    title={`Open ${selectedAsset.assignedEmployeeName}'s profile in Team Management`}
+                                  >
+                                    <span>{selectedAsset.assignedEmployeeName}</span>
+                                    <ExternalLink className="w-3.5 h-3.5" />
+                                  </button>
+                                );
+                              }
+                              return (
+                                <div className="font-bold text-sm text-slate-900 dark:text-white">
+                                  {selectedAsset.assignedEmployeeName}
+                                </div>
+                              );
+                            })()}
+                            {selectedAsset.assignedEmployeeEmail &&
+                              !selectedAsset.assignedEmployeeEmail.endsWith("@noemail.local") && (
+                                <div className="text-xs font-mono text-slate-500 dark:text-slate-400 mt-0.5">
+                                  {selectedAsset.assignedEmployeeEmail}
+                                </div>
+                              )}
                           </div>
-                          <span className="text-xs font-mono text-indigo-700 dark:text-indigo-300">
-                            Assigned {selectedAsset.assignedDate || "—"}
-                          </span>
+                          <div className="flex flex-col items-end gap-1.5">
+                            <span className="text-xs font-mono text-indigo-700 dark:text-indigo-300">
+                              Assigned {selectedAsset.assignedDate || "—"}
+                            </span>
+                            {(() => {
+                              const linkedMember = resolveLinkedEmployee(
+                                selectedAsset.assignedEmployeeId,
+                                selectedAsset.assignedEmployeeEmail,
+                                selectedAsset.assignedEmployeeName
+                              );
+                              if (linkedMember && onNavigateToEmployee) {
+                                return (
+                                  <button
+                                    type="button"
+                                    onClick={() => {
+                                      setSelectedAssetId(null);
+                                      onNavigateToEmployee(linkedMember.id);
+                                    }}
+                                    className="inline-flex items-center gap-1 px-2.5 py-1 rounded-lg bg-white dark:bg-slate-800 border border-indigo-200 dark:border-indigo-800/70 text-[11px] font-semibold text-indigo-700 dark:text-indigo-300 hover:bg-indigo-50 dark:hover:bg-slate-700 transition cursor-pointer"
+                                  >
+                                    <Users className="w-3 h-3" />
+                                    <span>Employee Profile</span>
+                                    <ExternalLink className="w-2.5 h-2.5" />
+                                  </button>
+                                );
+                              }
+                              return null;
+                            })()}
+                          </div>
                         </div>
-                        {selectedAsset.assignedEmployeeEmail &&
-                          !selectedAsset.assignedEmployeeEmail.endsWith("@noemail.local") && (
-                            <div className="text-xs font-mono text-slate-500 dark:text-slate-400">
-                              {selectedAsset.assignedEmployeeEmail}
-                            </div>
-                          )}
                         {selectedAsset.assignedEmployeeDeactivated && (
                           <div className="text-xs font-bold text-rose-600 dark:text-rose-400 flex items-center gap-1.5 pt-1">
                             <AlertTriangle className="w-3.5 h-3.5" />
@@ -1213,9 +1342,34 @@ export default function CompanyAssets({
                         className="p-4 rounded-xl border border-slate-200/80 dark:border-slate-800 bg-slate-50/50 dark:bg-slate-800/40 space-y-2.5 text-xs"
                       >
                         <div className="flex items-center justify-between">
-                          <div className="font-bold text-sm text-slate-900 dark:text-white">
-                            {asgn.employeeName}
-                          </div>
+                          {(() => {
+                            const linkedMember = resolveLinkedEmployee(
+                              asgn.employeeId,
+                              asgn.employeeEmail,
+                              asgn.employeeName
+                            );
+                            if (linkedMember && onNavigateToEmployee) {
+                              return (
+                                <button
+                                  type="button"
+                                  onClick={() => {
+                                    setSelectedAssetId(null);
+                                    onNavigateToEmployee(linkedMember.id);
+                                  }}
+                                  className="font-bold text-sm text-indigo-600 dark:text-indigo-400 hover:text-indigo-800 dark:hover:text-indigo-300 hover:underline inline-flex items-center gap-1.5 cursor-pointer text-left transition"
+                                  title={`Open ${asgn.employeeName}'s profile in Team Management`}
+                                >
+                                  <span>{asgn.employeeName}</span>
+                                  <ExternalLink className="w-3 h-3" />
+                                </button>
+                              );
+                            }
+                            return (
+                              <div className="font-bold text-sm text-slate-900 dark:text-white">
+                                {asgn.employeeName}
+                              </div>
+                            );
+                          })()}
                           <span
                             className={`font-bold ${
                               asgn.status === "Active"
