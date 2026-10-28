@@ -354,7 +354,16 @@ export const getTeamMemberRank = (member: { name?: string; email?: string }): nu
   if (name.includes("ju zaw") || name.includes("ju.zaw") || email.includes("ju.zaw") || email.includes("juzaw") || name.startsWith("ju ")) return 2;
 
   // 3. Ye Htet Zaw (after that)
-  if (name.includes("ye htet") || name.includes("yehtet") || email.includes("yehtet") || email.includes("ye.htet")) return 3;
+  // Ensure we match specifically Ye Htet Zaw and do NOT accidentally match Ivan - Ye Htet Khaing or other team members
+  const isIvanOrKhaing = name.includes("ivan") || name.includes("khaing") || email.includes("ivan") || email.includes("khaing");
+  if (!isIvanOrKhaing) {
+    const isYeHtetZawEmail = email === "yehtet.zaw@code-byte.io" || email.includes("yehtet.zaw") || email.includes("yehtet_zaw");
+    const isYeHtetZawName =
+      (name.includes("ye htet") && name.includes("zaw")) ||
+      (name.includes("yehtet") && name.includes("zaw")) ||
+      name === "ye htet zaw";
+    if (isYeHtetZawEmail || isYeHtetZawName) return 3;
+  }
 
   // 4. Carbon (after that)
   if (name.includes("carbon") || email.includes("carbon")) return 4;
