@@ -1,3 +1,4 @@
+import { assetLocations, towerLocation } from "../types";
 import type { CompanyAsset } from "../types";
 
 const headers = ["Asset code", "Name", "Category", "Brand / model", "Serial number", "Ownership", "Status",
@@ -99,6 +100,11 @@ export function previewInventory(input: string, assets: Pick<CompanyAsset, "asse
       accessories: get("accessories").split(",").map(a => a.trim()).filter(Boolean),
       supplier: get("supplier"), rentalEndDate: get("rental end"),
     };
+    if (payload.location) {
+      const tower = towerLocation(payload.location);
+      if (tower) payload.location = tower;
+      else errors.push(`Location must be ${assetLocations.join(" or ")}.`);
+    }
     const end = payload.rentalEndDate;
     if (end && (!/^\d{4}-\d{2}-\d{2}$/.test(end) || !Number.isFinite(Date.parse(end)) || new Date(end).toISOString().slice(0,10) !== end)) errors.push("Rental end must be a valid YYYY-MM-DD date.");
     if ((end || payload.supplier) && payload.ownershipType !== "Rented") errors.push("Set ownership to Rented for supplier or rental details.");

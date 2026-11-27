@@ -40,6 +40,20 @@ export interface TeamMember {
   updatedAt?: any;
 }
 
+export const assetLocations = ["Sakura Tower", "Bayintnaung Tower"] as const;
+
+export function towerLocation(value?: string) {
+  return assetLocations.find(tower => tower.toLowerCase() === value?.trim().toLowerCase());
+}
+
+export function assetDeleteRestriction(asset: CompanyAsset, hasHistory: boolean) {
+  if (asset.status === "Assigned" || asset.activeAssignmentId) return "Return this asset before retiring it.";
+  if (hasHistory || asset.hasAssignmentHistory) return asset.status === "Retired"
+    ? "This retired asset keeps its assignment history."
+    : "Use Retire to preserve this asset’s assignment history.";
+  return "";
+}
+
 export type AssetCategory = "Laptop" | "Monitor" | "Phone" | "Network Equipment" | "Other";
 export type AssetOwnership = "Company-owned" | "Rented";
 export type AssetStatus = "Available" | "Assigned" | "Under Maintenance" | "Returned to Supplier" | "Retired";

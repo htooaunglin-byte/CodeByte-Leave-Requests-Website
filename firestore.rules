@@ -74,7 +74,8 @@ service cloud.firestore {
       // Only allow permanent deletion by an Admin when the asset has no assignment history and is not assigned
       allow delete: if isAdmin() &&
         resource.data.status != 'Assigned' &&
-        resource.data.hasAssignmentHistory != true;
+        resource.data.get('activeAssignmentId', null) == null &&
+        resource.data.get('hasAssignmentHistory', false) == false;
     }
 
     // 5. Asset Assignments History (/asset_assignments/{assignmentId})

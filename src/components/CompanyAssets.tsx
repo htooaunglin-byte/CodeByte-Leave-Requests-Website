@@ -1,6 +1,7 @@
 import { useState, useEffect, useMemo } from "react";
 import {
   CompanyAsset,
+  assetDeleteRestriction,
   AssetAssignment,
   AssetActivityLog,
   AssetCategory,
@@ -334,6 +335,9 @@ export default function CompanyAssets({
     if (!selectedAsset) return [];
     return assignments.filter((asgn) => asgn.assetId === selectedAsset.id);
   }, [assignments, selectedAsset]);
+
+  const historyIds = useMemo(() => new Set(assignments.map(a => a.assetId)), [assignments]);
+  const deleteReason = selectedAsset && assetDeleteRestriction(selectedAsset, historyIds.has(selectedAsset.id));
 
   const selectedAssetLogs = useMemo(() => {
     if (!selectedAsset) return [];
@@ -732,6 +736,7 @@ export default function CompanyAssets({
                     rentalAlert.level === "overdue" ||
                     rentalAlert.level === "due-today" ||
                     rentalAlert.level === "due-soon";
+                  const rowDeleteReason = assetDeleteRestriction(asset, historyIds.has(asset.id));
                   const isSelected = selectedAssetId === asset.id;
 
                   return (
@@ -942,6 +947,12 @@ export default function CompanyAssets({
                             >
                               <Edit2 className="w-3.5 h-3.5" />
                             </button>
+                            <button type="button" disabled={!!rowDeleteReason}
+                              title={rowDeleteReason || "Delete asset"} aria-label={`Delete ${asset.assetCode}`}
+                              onClick={() => setRetireOrDeleteTarget({ asset, mode: "delete" })}
+                              className="rounded-md px-2 py-1 text-xs font-semibold text-rose-700 dark:text-rose-300 disabled:opacity-40">
+                              Delete
+                            </button>
                           </div>
                         </td>
                       )}
@@ -1054,21 +1065,19 @@ export default function CompanyAssets({
                   </button>
                 )}
 
-                {selectedAsset.status !== "Assigned" &&
-                  !selectedAsset.hasAssignmentHistory &&
-                  selectedAssetAssignments.length === 0 && (
                     <button
                       type="button"
                       onClick={() =>
                         setRetireOrDeleteTarget({ asset: selectedAsset, mode: "delete" })
                       }
                       className="inline-flex items-center gap-1.5 px-3 py-1.5 text-rose-600 dark:text-rose-400 hover:bg-rose-50 dark:hover:bg-rose-950/40 rounded-lg text-xs font-semibold cursor-pointer ml-auto"
-                      title="Delete mistakenly created asset (no assignment history)"
+                      disabled={!!deleteReason}
+                      title={deleteReason || "Delete asset"}
                     >
                       <Trash2 className="w-3.5 h-3.5" />
                       Delete
                     </button>
-                  )}
+                {deleteReason && <p className="w-full text-xs text-slate-500">{deleteReason}</p>}
               </div>
             )}
 

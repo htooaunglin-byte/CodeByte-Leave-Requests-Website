@@ -1,5 +1,6 @@
 import { useState, useEffect, FormEvent } from "react";
 import {
+  assetLocations, towerLocation, assetDeleteRestriction,
   CompanyAsset,
   AssetAssignment,
   AssetCategory,
@@ -199,7 +200,7 @@ export function AssetFormModal({
         accessories: finalAccessories,
         status: editingAsset?.status === "Assigned" ? "Assigned" : status,
         condition,
-        location: location.trim(),
+        location: towerLocation(location) ?? location.trim(),
         notes: notes.trim(),
         supplier: ownershipType === "Rented" ? supplier.trim() : "",
         rentalStartDate: ownershipType === "Rented" ? rentalStartDate : "",
@@ -278,8 +279,7 @@ export function AssetFormModal({
             </div>
           </div>
 
-          {/* Category, Brand/Model, Serial */}
-          <div className="grid grid-cols-1 sm:grid-cols-3 gap-4">
+          <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
             <div>
               <label className="block text-xs font-bold text-slate-600 dark:text-slate-300 mb-1.5">
                 Category <span className="text-rose-500">*</span>
@@ -296,6 +296,20 @@ export function AssetFormModal({
                 ))}
               </select>
             </div>
+            <div>
+              <label htmlFor="asset-location" className="block text-xs font-bold text-slate-600 dark:text-slate-300 mb-1.5">Location</label>
+              <select id="asset-location" value={towerLocation(location) || ""} onChange={e => setLocation(e.target.value)}
+                className="w-full px-3 py-2 border border-slate-200 dark:border-slate-700 rounded-lg text-sm text-slate-900 dark:text-white bg-slate-50/50 dark:bg-slate-800/60 focus:outline-none focus:ring-2 focus:ring-indigo-500/30 focus:border-indigo-500 cursor-pointer">
+                <option value="" disabled>{location ? "Select a replacement tower" : "Select tower (optional)"}</option>
+                {assetLocations.map(tower => <option key={tower}>{tower}</option>)}
+              </select>
+              {location && !towerLocation(location) && <p className="mt-1 text-xs">Saved location: {location}</p>}
+            </div>
+          </div>
+          <details className="rounded-xl border border-slate-200 dark:border-slate-700 p-4">
+            <summary className="cursor-pointer text-sm font-semibold">More details</summary>
+            <div className="mt-4 space-y-4">
+              <div className="grid gap-4 sm:grid-cols-2">
             <div>
               <label className="block text-xs font-bold text-slate-600 dark:text-slate-300 mb-1.5">
                 Brand / Model <span className="text-slate-400 font-normal">(Optional)</span>
@@ -320,10 +334,6 @@ export function AssetFormModal({
                 className="w-full px-3.5 py-2 border border-slate-200 dark:border-slate-700 rounded-lg text-sm font-mono text-slate-900 dark:text-white placeholder-slate-400 dark:placeholder-slate-500 bg-slate-50/50 dark:bg-slate-800/60 focus:outline-none focus:ring-2 focus:ring-indigo-500/30 focus:border-indigo-500"
               />
             </div>
-          </div>
-
-          {/* Ownership, Condition, Status, Location */}
-          <div className="grid grid-cols-1 sm:grid-cols-4 gap-4">
             <div>
               <label className="block text-xs font-bold text-slate-600 dark:text-slate-300 mb-1.5">
                 Ownership Type
@@ -379,20 +389,7 @@ export function AssetFormModal({
               )}
             </div>
 
-            <div>
-              <label className="block text-xs font-bold text-slate-600 dark:text-slate-300 mb-1.5">
-                Location <span className="text-slate-400 font-normal">(Opt.)</span>
-              </label>
-              <input
-                type="text"
-                placeholder="e.g. Yangon Office"
-                value={location}
-                onChange={(e) => setLocation(e.target.value)}
-                className="w-full px-3.5 py-2 border border-slate-200 dark:border-slate-700 rounded-lg text-sm text-slate-900 dark:text-white placeholder-slate-400 dark:placeholder-slate-500 bg-slate-50/50 dark:bg-slate-800/60 focus:outline-none focus:ring-2 focus:ring-indigo-500/30"
-              />
-            </div>
-          </div>
-
+              </div>
           {/* Rented Asset Details Section */}
           {ownershipType === "Rented" && (
             <div className="p-4 rounded-xl border border-amber-200/80 dark:border-amber-800/50 bg-amber-50/40 dark:bg-amber-950/20 space-y-4">
@@ -573,6 +570,9 @@ export function AssetFormModal({
               className="w-full px-3.5 py-2 border border-slate-200 dark:border-slate-700 rounded-lg text-sm text-slate-900 dark:text-white placeholder-slate-400 dark:placeholder-slate-500 bg-slate-50/50 dark:bg-slate-800/60 focus:outline-none focus:ring-2 focus:ring-indigo-500/30"
             />
           </div>
+
+            </div>
+          </details>
 
           {/* Footer Actions */}
           <div className="flex items-center justify-end gap-3 pt-4 border-t border-slate-100 dark:border-slate-800">
@@ -1456,13 +1456,14 @@ export function RetireOrDeleteModal({
 
   if (!isOpen || !asset) return null;
 
-  const canDelete = !hasHistory && !asset.hasAssignmentHistory && asset.status !== "Assigned";
+  const canDelete = !assetDeleteRestriction(asset, hasHistory);
 
   const handleConfirm = async () => {
     setError(null);
     setSubmitting(true);
     try {
-      if (mode === "delete" && canDelete) {
+      if (mode === "delete") {
+        if (!canDelete) throw new Error(assetDeleteRestriction(asset, hasHistory));
         await onDelete(asset.id);
       } else {
         await onRetire(asset.id, reason.trim());
@@ -1481,12 +1482,12 @@ export function RetireOrDeleteModal({
         <div className="flex items-start gap-3">
           <div
             className={`w-10 h-10 rounded-full flex items-center justify-center shrink-0 ${
-              mode === "delete" && canDelete
+              mode === "delete"
                 ? "bg-rose-50 dark:bg-rose-950/50 text-rose-600 dark:text-rose-400"
                 : "bg-amber-50 dark:bg-amber-950/50 text-amber-600 dark:text-amber-400"
             }`}
           >
-            {mode === "delete" && canDelete ? (
+            {mode === "delete" ? (
               <Trash2 className="w-5 h-5" />
             ) : (
               <Archive className="w-5 h-5" />
@@ -1494,13 +1495,13 @@ export function RetireOrDeleteModal({
           </div>
           <div>
             <h3 className="text-base font-bold text-slate-900 dark:text-white">
-              {mode === "delete" && canDelete
+              {mode === "delete"
                 ? "Permanently Delete Asset?"
                 : "Retire Asset from Active Inventory?"}
             </h3>
             <p className="text-xs text-slate-500 dark:text-slate-400 mt-1">
               {mode === "delete" && !canDelete
-                ? "This asset has assignment history and cannot be permanently deleted. Retiring preserves historical records."
+                ? assetDeleteRestriction(asset, hasHistory)
                 : mode === "delete"
                 ? "Only mistakenly created assets with zero assignment history can be deleted. This cannot be undone."
                 : "Retiring marks this equipment as decommissioned while preserving its full assignment & audit history."}
@@ -1521,7 +1522,7 @@ export function RetireOrDeleteModal({
           — <strong className="text-slate-900 dark:text-white">{asset.assetName}</strong>
         </div>
 
-        {(mode === "retire" || !canDelete) && (
+        {(mode === "retire") && (
           <div>
             <label className="block text-xs font-bold text-slate-600 dark:text-slate-300 mb-1">
               Retirement Reason <span className="text-slate-400 font-normal">(Optional)</span>
@@ -1546,17 +1547,17 @@ export function RetireOrDeleteModal({
           </button>
           <button
             type="button"
-            disabled={submitting}
+            disabled={submitting || (mode === "delete" && !canDelete)}
             onClick={handleConfirm}
             className={`px-4 py-2 text-white rounded-lg text-xs font-semibold shadow-sm cursor-pointer disabled:opacity-50 ${
-              mode === "delete" && canDelete
+              mode === "delete"
                 ? "bg-rose-600 hover:bg-rose-700"
                 : "bg-slate-900 hover:bg-slate-800 dark:bg-indigo-600 dark:hover:bg-indigo-700"
             }`}
           >
             {submitting
               ? "Processing..."
-              : mode === "delete" && canDelete
+              : mode === "delete"
               ? "Confirm Permanent Delete"
               : "Retire Asset"}
           </button>
