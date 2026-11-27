@@ -2,6 +2,8 @@ import { useState, useEffect, useMemo } from "react";
 import {
   CompanyAsset,
   assetDeleteRestriction,
+  assetLocations,
+  towerLocation,
   AssetAssignment,
   AssetActivityLog,
   AssetCategory,
@@ -153,6 +155,7 @@ export default function CompanyAssets({
 }: CompanyAssetsProps) {
   // Search and Filter States
   const [search, setSearch] = useState("");
+  const [locationFilter, setLocationFilter] = useState("all");
   const [categoryFilter, setCategoryFilter] = useState<string>("all");
   const [ownershipFilter, setOwnershipFilter] = useState<string>("all");
   const [statusFilter, setStatusFilter] = useState<string>("all");
@@ -233,15 +236,6 @@ export default function CompanyAssets({
     );
   }, [assets, isAdmin, currentUserEmail]);
 
-  // Summary counts
-  const summaryStats = useMemo(() => {
-    const total = visibleAssets.length;
-    const available = visibleAssets.filter((a) => a.status === "Available").length;
-    const assigned = visibleAssets.filter((a) => a.status === "Assigned").length;
-    const maintenance = visibleAssets.filter((a) => a.status === "Under Maintenance").length;
-    return { total, available, assigned, maintenance };
-  }, [visibleAssets]);
-
   // Rented assets needing attention (due within 30 days or overdue, excluding Returned to Supplier / Retired)
   const rentalAlerts = useMemo(() => {
     return visibleAssets.filter((a) => {
@@ -274,7 +268,7 @@ export default function CompanyAssets({
   }, [visibleAssets, teamMembers, isAdmin]);
 
   // Filtered assets for the table
-  const filteredAssets = useMemo(() => {
+  const matchingAssets = useMemo(() => {
     const q = search.trim().toLowerCase();
     return visibleAssets.filter((asset) => {
       if (q) {
@@ -290,7 +284,7 @@ export default function CompanyAssets({
       }
       if (categoryFilter !== "all" && asset.category !== categoryFilter) return false;
       if (ownershipFilter !== "all" && asset.ownershipType !== ownershipFilter) return false;
-      if (statusFilter !== "all" && asset.status !== statusFilter) return false;
+      if (locationFilter !== "all" && towerLocation(asset.location) !== locationFilter) return false;
       if (isAdmin && employeeFilter !== "all") {
         if (employeeFilter === "unassigned") {
           if (asset.status === "Assigned" || asset.assignedEmployeeId) return false;
@@ -311,11 +305,25 @@ export default function CompanyAssets({
     search,
     categoryFilter,
     ownershipFilter,
-    statusFilter,
+    locationFilter,
     employeeFilter,
     isAdmin,
     teamMembers,
   ]);
+
+  // Summary counts
+  const summaryStats = useMemo(() => {
+    const total = matchingAssets.length;
+    const available = matchingAssets.filter((a) => a.status === "Available").length;
+    const assigned = matchingAssets.filter((a) => a.status === "Assigned").length;
+    const maintenance = matchingAssets.filter((a) => a.status === "Under Maintenance").length;
+    return { total, available, assigned, maintenance };
+  }, [matchingAssets]);
+
+  const filteredAssets = useMemo(
+    () => statusFilter === "all" ? matchingAssets : matchingAssets.filter(asset => asset.status === statusFilter),
+    [matchingAssets, statusFilter]
+  );
 
   const sortedTeamMembers = useMemo(() => {
     return [...teamMembers].sort((a, b) => {
@@ -362,6 +370,7 @@ export default function CompanyAssets({
 
   const resetFilters = () => {
     setSearch("");
+    setLocationFilter("all");
     setCategoryFilter("all");
     setOwnershipFilter("all");
     setStatusFilter("all");
@@ -370,6 +379,7 @@ export default function CompanyAssets({
 
   const hasActiveFilters =
     search.trim() !== "" ||
+    locationFilter !== "all" ||
     categoryFilter !== "all" ||
     ownershipFilter !== "all" ||
     statusFilter !== "all" ||
@@ -436,57 +446,61 @@ export default function CompanyAssets({
 
       {/* Summary Cards */}
       <div className="grid grid-cols-2 lg:grid-cols-4 gap-4">
-        <div className="bg-white dark:bg-slate-900 p-4 sm:p-5 rounded-xl border border-slate-200/70 dark:border-slate-800 shadow-2xs flex items-center justify-between">
-          <div>
-            <p className="text-xs font-semibold text-slate-500 dark:text-slate-400">
+        <button type="button" onClick={() => setStatusFilter("all")} aria-pressed={statusFilter === "all"}
+          className="text-left cursor-pointer hover:border-indigo-400 aria-pressed:ring-2 aria-pressed:ring-indigo-500 focus-visible:outline-2 focus-visible:outline-offset-2 bg-white dark:bg-slate-900 p-4 sm:p-5 rounded-xl border border-slate-200/70 dark:border-slate-800 shadow-2xs flex items-center justify-between">
+          <span>
+            <span className="block text-xs font-semibold text-slate-500 dark:text-slate-400">
               {isAdmin ? "Total Assets" : "Assigned to You"}
-            </p>
-            <p className="text-2xl sm:text-3xl font-extrabold text-slate-900 dark:text-white font-mono tabular-nums mt-1">
+            </span>
+            <span className="block text-2xl sm:text-3xl font-extrabold text-slate-900 dark:text-white font-mono tabular-nums mt-1">
               {summaryStats.total}
-            </p>
-          </div>
-          <div className="w-10 h-10 rounded-xl bg-slate-100 dark:bg-slate-800 flex items-center justify-center text-slate-700 dark:text-slate-300">
+            </span>
+          </span>
+          <span className="w-10 h-10 rounded-xl bg-slate-100 dark:bg-slate-800 flex items-center justify-center text-slate-700 dark:text-slate-300">
             <Package className="w-5 h-5" />
-          </div>
-        </div>
+          </span>
+        </button>
 
-        <div className="bg-white dark:bg-slate-900 p-4 sm:p-5 rounded-xl border border-slate-200/70 dark:border-slate-800 shadow-2xs flex items-center justify-between">
-          <div>
-            <p className="text-xs font-semibold text-slate-500 dark:text-slate-400">Available</p>
-            <p className="text-2xl sm:text-3xl font-extrabold text-emerald-600 dark:text-emerald-400 font-mono tabular-nums mt-1">
+        <button type="button" onClick={() => setStatusFilter("Available")} aria-pressed={statusFilter === "Available"}
+          className="text-left cursor-pointer hover:border-indigo-400 aria-pressed:ring-2 aria-pressed:ring-indigo-500 focus-visible:outline-2 focus-visible:outline-offset-2 bg-white dark:bg-slate-900 p-4 sm:p-5 rounded-xl border border-slate-200/70 dark:border-slate-800 shadow-2xs flex items-center justify-between">
+          <span>
+            <span className="block text-xs font-semibold text-slate-500 dark:text-slate-400">Available</span>
+            <span className="block text-2xl sm:text-3xl font-extrabold text-emerald-600 dark:text-emerald-400 font-mono tabular-nums mt-1">
               {summaryStats.available}
-            </p>
-          </div>
-          <div className="w-10 h-10 rounded-xl bg-emerald-50 dark:bg-emerald-950/50 flex items-center justify-center text-emerald-600 dark:text-emerald-400">
+            </span>
+          </span>
+          <span className="w-10 h-10 rounded-xl bg-emerald-50 dark:bg-emerald-950/50 flex items-center justify-center text-emerald-600 dark:text-emerald-400">
             <CheckCircle2 className="w-5 h-5" />
-          </div>
-        </div>
+          </span>
+        </button>
 
-        <div className="bg-white dark:bg-slate-900 p-4 sm:p-5 rounded-xl border border-slate-200/70 dark:border-slate-800 shadow-2xs flex items-center justify-between">
-          <div>
-            <p className="text-xs font-semibold text-slate-500 dark:text-slate-400">Assigned</p>
-            <p className="text-2xl sm:text-3xl font-extrabold text-indigo-600 dark:text-indigo-400 font-mono tabular-nums mt-1">
+        <button type="button" onClick={() => setStatusFilter("Assigned")} aria-pressed={statusFilter === "Assigned"}
+          className="text-left cursor-pointer hover:border-indigo-400 aria-pressed:ring-2 aria-pressed:ring-indigo-500 focus-visible:outline-2 focus-visible:outline-offset-2 bg-white dark:bg-slate-900 p-4 sm:p-5 rounded-xl border border-slate-200/70 dark:border-slate-800 shadow-2xs flex items-center justify-between">
+          <span>
+            <span className="block text-xs font-semibold text-slate-500 dark:text-slate-400">Assigned</span>
+            <span className="block text-2xl sm:text-3xl font-extrabold text-indigo-600 dark:text-indigo-400 font-mono tabular-nums mt-1">
               {summaryStats.assigned}
-            </p>
-          </div>
-          <div className="w-10 h-10 rounded-xl bg-indigo-50 dark:bg-indigo-950/50 flex items-center justify-center text-indigo-600 dark:text-indigo-400">
+            </span>
+          </span>
+          <span className="w-10 h-10 rounded-xl bg-indigo-50 dark:bg-indigo-950/50 flex items-center justify-center text-indigo-600 dark:text-indigo-400">
             <UserCheck className="w-5 h-5" />
-          </div>
-        </div>
+          </span>
+        </button>
 
-        <div className="bg-white dark:bg-slate-900 p-4 sm:p-5 rounded-xl border border-slate-200/70 dark:border-slate-800 shadow-2xs flex items-center justify-between">
-          <div>
-            <p className="text-xs font-semibold text-slate-500 dark:text-slate-400">
+        <button type="button" onClick={() => setStatusFilter("Under Maintenance")} aria-pressed={statusFilter === "Under Maintenance"}
+          className="text-left cursor-pointer hover:border-indigo-400 aria-pressed:ring-2 aria-pressed:ring-indigo-500 focus-visible:outline-2 focus-visible:outline-offset-2 bg-white dark:bg-slate-900 p-4 sm:p-5 rounded-xl border border-slate-200/70 dark:border-slate-800 shadow-2xs flex items-center justify-between">
+          <span>
+            <span className="block text-xs font-semibold text-slate-500 dark:text-slate-400">
               Under Maintenance
-            </p>
-            <p className="text-2xl sm:text-3xl font-extrabold text-amber-600 dark:text-amber-400 font-mono tabular-nums mt-1">
+            </span>
+            <span className="block text-2xl sm:text-3xl font-extrabold text-amber-600 dark:text-amber-400 font-mono tabular-nums mt-1">
               {summaryStats.maintenance}
-            </p>
-          </div>
-          <div className="w-10 h-10 rounded-xl bg-amber-50 dark:bg-amber-950/50 flex items-center justify-center text-amber-600 dark:text-amber-400">
+            </span>
+          </span>
+          <span className="w-10 h-10 rounded-xl bg-amber-50 dark:bg-amber-950/50 flex items-center justify-center text-amber-600 dark:text-amber-400">
             <Wrench className="w-5 h-5" />
-          </div>
-        </div>
+          </span>
+        </button>
       </div>
 
       {/* Alert Banner: Rented Assets Due Within 30 Days or Overdue */}
@@ -561,7 +575,7 @@ export default function CompanyAssets({
 
       {/* Search & Filters Toolbar */}
       <div className="bg-white dark:bg-slate-900 p-4 rounded-xl border border-slate-200/70 dark:border-slate-800 shadow-2xs space-y-3">
-        <div className="flex flex-col lg:flex-row lg:items-center gap-3">
+        <div className="flex flex-col gap-3">
           {/* Search Input */}
           <div className="relative flex-1">
             <Search className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-slate-400 dark:text-slate-500" />
@@ -575,7 +589,17 @@ export default function CompanyAssets({
           </div>
 
           {/* Filter Dropdowns */}
-          <div className="grid grid-cols-2 sm:grid-cols-4 gap-2.5">
+          <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-5 gap-2.5">
+            <select
+              aria-label="Filter by tower"
+              value={locationFilter}
+              onChange={(e) => setLocationFilter(e.target.value)}
+              className="px-3 py-2 bg-slate-50 dark:bg-slate-800 border border-slate-200 dark:border-slate-700 rounded-lg text-xs font-semibold text-slate-700 dark:text-slate-200 focus:outline-none focus:ring-1 focus:ring-indigo-500 cursor-pointer"
+            >
+              <option value="all">All locations</option>
+              {assetLocations.map(tower => <option key={tower}>{tower}</option>)}
+            </select>
+
             <select
               value={categoryFilter}
               onChange={(e) => setCategoryFilter(e.target.value)}
