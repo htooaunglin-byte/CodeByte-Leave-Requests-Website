@@ -735,7 +735,7 @@ export default function TeamManagement({
               {(() => {
                 const activeAssets = getMemberActiveAssets(selectedProfileMember);
                 const memberHistory = getMemberAssignments(selectedProfileMember);
-                const pastHistory = memberHistory.filter((h) => h.status === "Returned");
+                const pastHistory = memberHistory.filter((h) => h.status !== "Active");
 
                 return (
                   <>
@@ -919,12 +919,12 @@ export default function TeamManagement({
                       <div className="space-y-3 pt-2 border-t border-slate-100 dark:border-slate-800">
                         <h3 className="text-xs font-bold uppercase tracking-wider text-slate-400 dark:text-slate-500 flex items-center gap-2">
                           <History className="w-4 h-4" />
-                          Past Returned Equipment ({pastHistory.length})
+                          Past Equipment Assignments ({pastHistory.length})
                         </h3>
                         <div className="space-y-2.5">
                           {pastHistory.map((item) => {
                             const existingAsset = assets.find(
-                              (a) => a.id === item.assetId || a.assetCode === item.assetCode
+                              (a) => item.assetId ? a.id === item.assetId : a.assetCode === item.assetCode
                             );
                             return (
                               <div
@@ -963,13 +963,13 @@ export default function TeamManagement({
                                     )}
                                   </div>
                                   <span className="text-emerald-600 dark:text-emerald-400 font-semibold font-mono">
-                                    Returned {item.returnedDate || "—"}
+                                    {item.status === "Asset removed" ? "Asset removed" : `Returned ${item.returnedDate || "—"}`}
                                   </span>
                                 </div>
                                 <div className="text-slate-500 dark:text-slate-400 flex flex-wrap gap-x-3 gap-y-1">
                                   <span>Assigned: {item.assignedDate}</span>
                                   <span>·</span>
-                                  <span>Return Condition: {item.conditionAtReturn || "—"}</span>
+                                  {item.status === "Returned" && <span>Return Condition: {item.conditionAtReturn || "—"}</span>}
                                 </div>
                                 {item.missingOrDamagedItems && (
                                   <div className="text-rose-600 dark:text-rose-400 font-semibold">

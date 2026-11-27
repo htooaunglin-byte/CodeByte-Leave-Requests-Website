@@ -1,4 +1,4 @@
-import { assetLocations, towerLocation } from "../types";
+import { defaultAssetCategories, assetLocations, towerLocation } from "../types";
 import type { CompanyAsset } from "../types";
 
 const headers = ["Asset code", "Name", "Category", "Brand / model", "Serial number", "Ownership", "Status",
@@ -55,7 +55,8 @@ function readCsv(input: string) {
   return records;
 }
 
-export function previewInventory(input: string, assets: Pick<CompanyAsset, "assetCode">[]) {
+export function previewInventory(input: string, assets: Pick<CompanyAsset, "assetCode">[], categories = defaultAssetCategories) {
+  if (!categories.length) throw new Error("Add a category before importing assets.");
   const [labels = [], ...records] = readCsv(input);
   const columns = labels.map(label => label.toLowerCase());
   for (const required of ["asset code", "name"]) {
@@ -92,7 +93,7 @@ export function previewInventory(input: string, assets: Pick<CompanyAsset, "asse
     if ((counts.get(assetCode) ?? 0) > 1) errors.push("Repeated code in this CSV.");
     if (get("assigned employee") || get("assigned date")) errors.push("Assign employees through the asset page.");
     const payload: NewAsset = {
-      assetCode, assetName, category: choice("category", ["Other","Laptop","Monitor","Phone","Network Equipment"] as const),
+      assetCode, assetName, category: choice("category", categories.includes("Other") ? ["Other", ...categories.filter(c => c !== "Other")] : categories),
       ownershipType: choice("ownership", ["Company-owned","Rented"] as const),
       condition: choice("condition", ["Good","Fair","Damaged"] as const),
       status: choice("status", ["Available","Under Maintenance"] as const),

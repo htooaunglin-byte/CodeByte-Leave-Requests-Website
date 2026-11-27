@@ -2,7 +2,8 @@ import { useEffect, useMemo, useRef, useState } from "react";
 import { downloadInventory, importLimit, previewInventory, type NewAsset } from "../utils/assetCsv";
 import type { CompanyAsset } from "../types";
 
-export default function AssetImport({ assets, save, close }: {
+export default function AssetImport({ assets, categories, save, close }: {
+  categories: string[];
   assets: CompanyAsset[];
   save: (rows: NewAsset[]) => Promise<void>;
   close: () => void;
@@ -25,9 +26,9 @@ export default function AssetImport({ assets, save, close }: {
   }, [file]);
   const preview = useMemo(() => {
     if (!file || reading) return {rows: [], message: ""};
-    try { return {rows: previewInventory(source, assets), message: ""}; }
+    try { return {rows: previewInventory(source, assets, categories), message: ""}; }
     catch (e) { return {rows: [], message: (e as Error).message}; }
-  }, [source, assets, file, reading]);
+  }, [source, assets, file, reading, categories]);
   const invalid = preview.rows.filter(row => row.errors.length).length;
   const ready = preview.rows.length - invalid;
   async function confirm() {
@@ -40,7 +41,7 @@ export default function AssetImport({ assets, save, close }: {
   return <dialog ref={dialog} aria-labelledby="import-title" onCancel={e => {e.preventDefault(); if (!busy) close();}}
     className="m-auto w-[min(94vw,52rem)] max-h-[90dvh] overflow-auto rounded-xl border border-slate-300 bg-white p-5 text-slate-900 shadow-xl backdrop:bg-black/50 dark:bg-slate-900 dark:text-white">
     <h2 id="import-title" className="text-xl font-bold">Import company assets</h2>
-    <p className="mt-2 text-sm">Choose a CSV with an Asset code and Name for each new asset (up to {importLimit}). Blank category, ownership, status and condition default to Other, Company-owned, Available and Good.</p>
+    <p className="mt-2 text-sm">Choose a CSV with an Asset code and Name for each new asset (up to {importLimit}). Blank category, ownership, status and condition default to {categories.includes("Other") ? "Other" : categories[0]}, Company-owned, Available and Good.</p>
     <button className="my-3 text-sm font-semibold underline" onClick={() => downloadInventory([])}>Download CSV template</button>
     <input type="file" accept=".csv,text/csv" disabled={busy} aria-label="Choose asset CSV" className="block w-full rounded border p-2 text-sm" onChange={e => {
       const next = e.target.files?.[0];

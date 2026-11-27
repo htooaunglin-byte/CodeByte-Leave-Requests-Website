@@ -52,6 +52,17 @@ service cloud.firestore {
       allow write: if isAdmin();
     }
 
+    match /asset_settings/categories {
+      allow read: if isSignedIn();
+      allow create, update: if isAdmin() && request.resource.data.keys().hasOnly(['names']) &&
+        request.resource.data.names is list && request.resource.data.names.size() <= 200;
+    }
+    function currentCategory(name) {
+      let path = /databases/$(database)/documents/asset_settings/categories;
+      return exists(path) ? name in get(path).data.names :
+        name in ['Laptop', 'Monitor', 'Phone', 'Network Equipment', 'Other'];
+    }
+
     // 4. Company Assets (/assets/{assetId})
     // Admins can view and manage all assets.
     // Non-admin employees can ONLY read assets currently assigned to their email.
@@ -60,17 +71,21 @@ service cloud.firestore {
         isSignedIn() &&
         resource.data.assignedEmployeeEmail == userEmail()
       );
-      allow create, update: if isAdmin() &&
-        request.resource.data.assetCode is string &&
+      allow create: if isAdmin() && validAsset() && currentCategory(request.resource.data.category);
+      allow update: if isAdmin() && resource.data.get('deletedAt', null) == null && validAsset() &&
+        (resource.data.category == request.resource.data.category || currentCategory(request.resource.data.category));
+      function validAsset() {
+        return request.resource.data.assetCode is string &&
         request.resource.data.assetCode.size() > 0 &&
         request.resource.data.assetCode.size() <= 64 &&
         request.resource.data.assetName is string &&
         request.resource.data.assetName.size() > 0 &&
         request.resource.data.assetName.size() <= 200 &&
-        request.resource.data.category in ['Laptop', 'Monitor', 'Phone', 'Network Equipment', 'Other'] &&
+        request.resource.data.category is string && request.resource.data.category.size() > 0 &&
         request.resource.data.ownershipType in ['Company-owned', 'Rented'] &&
         request.resource.data.status in ['Available', 'Assigned', 'Under Maintenance', 'Returned to Supplier', 'Retired'] &&
         request.resource.data.condition in ['Good', 'Fair', 'Damaged'];
+      }
       // Only allow permanent deletion by an Admin when the asset has no assignment history and is not assigned
       allow delete: if isAdmin() &&
         resource.data.status != 'Assigned' &&

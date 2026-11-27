@@ -1,7 +1,7 @@
 import { useState, useEffect, useMemo } from "react";
 import {
   CompanyAsset,
-  assetDeleteRestriction,
+  defaultAssetCategories,
   assetLocations,
   towerLocation,
   AssetAssignment,
@@ -53,6 +53,8 @@ import {
   RetireOrDeleteModal,
 } from "./AssetActionModals";
 
+import AssetCategories from "./AssetCategories";
+import { subscribeCategories } from "../firebase";
 import AssetImport from "./AssetImport";
 import { downloadInventory } from "../utils/assetCsv";
 
@@ -93,7 +95,7 @@ interface CompanyAssetsProps {
     returnedToSupplierNotes?: string;
   }) => Promise<void>;
   onRetireAsset: (assetId: string, reason: string) => Promise<void>;
-  onDeleteAsset: (assetId: string) => Promise<void>;
+  onDeleteAsset: (asset: CompanyAsset) => Promise<void>;
   focusedAssetId?: string | null;
   onClearFocusedAsset?: () => void;
   onNavigateToEmployee?: (memberId: string) => void;
@@ -153,10 +155,21 @@ export default function CompanyAssets({
   onClearFocusedAsset,
   onNavigateToEmployee,
 }: CompanyAssetsProps) {
+  const [categories, setCategories] = useState<string[]>(defaultAssetCategories);
+  const [categoryError, setCategoryError] = useState("");
+  const [categoryRetry, setCategoryRetry] = useState(0);
+  const [manageCategories, setManageCategories] = useState(false);
+  useEffect(() => {
+    if (!isAdmin) return;
+    setCategoryError("");
+    return subscribeCategories(setCategories, () => {
+      setCategoryError("Could not load asset categories. Check the published Firestore rules and retry.");
+    });
+  }, [isAdmin, categoryRetry]);
   // Search and Filter States
   const [search, setSearch] = useState("");
   const [locationFilter, setLocationFilter] = useState("all");
-  const [categoryFilter, setCategoryFilter] = useState<string>("all");
+  const [categoryFilter, setCategoryFilter] = useState<string>("");
   const [ownershipFilter, setOwnershipFilter] = useState<string>("all");
   const [statusFilter, setStatusFilter] = useState<string>("all");
   const [employeeFilter, setEmployeeFilter] = useState<string>("all");
@@ -282,7 +295,7 @@ export default function CompanyAssets({
           return false;
         }
       }
-      if (categoryFilter !== "all" && asset.category !== categoryFilter) return false;
+      if (categoryFilter !== "" && asset.category !== categoryFilter) return false;
       if (ownershipFilter !== "all" && asset.ownershipType !== ownershipFilter) return false;
       if (locationFilter !== "all" && towerLocation(asset.location) !== locationFilter) return false;
       if (isAdmin && employeeFilter !== "all") {
@@ -344,9 +357,7 @@ export default function CompanyAssets({
     return assignments.filter((asgn) => asgn.assetId === selectedAsset.id);
   }, [assignments, selectedAsset]);
 
-  const historyIds = useMemo(() => new Set(assignments.map(a => a.assetId)), [assignments]);
-  const deleteReason = selectedAsset && assetDeleteRestriction(selectedAsset, historyIds.has(selectedAsset.id));
-
+  const filterCategories = [...new Set([...categories, ...visibleAssets.map(asset => asset.category)])];
   const selectedAssetLogs = useMemo(() => {
     if (!selectedAsset) return [];
     return assetLogs.filter((log) => log.assetId === selectedAsset.id);
@@ -371,7 +382,7 @@ export default function CompanyAssets({
   const resetFilters = () => {
     setSearch("");
     setLocationFilter("all");
-    setCategoryFilter("all");
+    setCategoryFilter("");
     setOwnershipFilter("all");
     setStatusFilter("all");
     setEmployeeFilter("all");
@@ -380,7 +391,7 @@ export default function CompanyAssets({
   const hasActiveFilters =
     search.trim() !== "" ||
     locationFilter !== "all" ||
-    categoryFilter !== "all" ||
+    categoryFilter !== "" ||
     ownershipFilter !== "all" ||
     statusFilter !== "all" ||
     employeeFilter !== "all";
@@ -396,9 +407,9 @@ export default function CompanyAssets({
   }
 
   return (
-    <div className="p-4 sm:p-6 md:p-8 space-y-6 flex-1 max-w-7xl mx-auto w-full">
+    <div className="min-w-0 p-3 sm:p-6 md:p-8 space-y-4 sm:space-y-6 flex-1 max-w-7xl mx-auto w-full">
       {/* Page Header */}
-      <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-4">
+      <div className="flex flex-col xl:flex-row xl:items-center xl:justify-between gap-4">
         <div>
           <h1 className="text-2xl md:text-3xl font-extrabold text-slate-900 dark:text-white tracking-tight">
             {isAdmin ? "Company Assets" : "My Assigned Assets"}
@@ -411,7 +422,9 @@ export default function CompanyAssets({
         </div>
 
         {isAdmin ? (
-          <div className="flex flex-wrap items-center gap-2 sm:justify-end">
+          <div className="flex flex-wrap items-center gap-2 xl:justify-end">
+          <button type="button" onClick={() => setManageCategories(true)} disabled={!!categoryError}
+            className="rounded-lg border px-3 py-2.5 text-sm font-semibold">Categories</button>
           <button type="button" disabled={loadingAssets || (assets.length > 0 && !filteredAssets.length)}
             onClick={() => downloadInventory(filteredAssets)}
             className="inline-flex items-center gap-2 whitespace-nowrap rounded-lg bg-emerald-700 px-4 py-2.5 text-sm font-semibold text-white shadow-sm hover:bg-emerald-800 focus-visible:outline-2 focus-visible:outline-offset-2 disabled:cursor-not-allowed disabled:bg-slate-500">
@@ -442,7 +455,10 @@ export default function CompanyAssets({
         )}
       </div>
 
-      {isAdmin && importOpen && <AssetImport assets={assets} close={() => setImportOpen(false)} save={onImportAssets} />}
+      {isAdmin && importOpen && <AssetImport categories={categories} assets={assets} close={() => setImportOpen(false)} save={onImportAssets} />}
+
+      {isAdmin && categoryError && <p role="alert" className="text-sm">{categoryError} <button className="underline" onClick={() => setCategoryRetry(value => value + 1)}>Retry</button></p>}
+      {isAdmin && manageCategories && <AssetCategories names={categories} close={() => setManageCategories(false)} />}
 
       {/* Summary Cards */}
       <div className="grid grid-cols-2 lg:grid-cols-4 gap-4">
@@ -594,7 +610,7 @@ export default function CompanyAssets({
               aria-label="Filter by tower"
               value={locationFilter}
               onChange={(e) => setLocationFilter(e.target.value)}
-              className="px-3 py-2 bg-slate-50 dark:bg-slate-800 border border-slate-200 dark:border-slate-700 rounded-lg text-xs font-semibold text-slate-700 dark:text-slate-200 focus:outline-none focus:ring-1 focus:ring-indigo-500 cursor-pointer"
+              className="min-w-0 px-3 py-2 bg-slate-50 dark:bg-slate-800 border border-slate-200 dark:border-slate-700 rounded-lg text-xs font-semibold text-slate-700 dark:text-slate-200 focus:outline-none focus:ring-1 focus:ring-indigo-500 cursor-pointer"
             >
               <option value="all">All locations</option>
               {assetLocations.map(tower => <option key={tower}>{tower}</option>)}
@@ -603,20 +619,16 @@ export default function CompanyAssets({
             <select
               value={categoryFilter}
               onChange={(e) => setCategoryFilter(e.target.value)}
-              className="px-3 py-2 bg-slate-50 dark:bg-slate-800 border border-slate-200 dark:border-slate-700 rounded-lg text-xs font-semibold text-slate-700 dark:text-slate-200 focus:outline-none focus:ring-1 focus:ring-indigo-500 cursor-pointer"
+              className="min-w-0 px-3 py-2 bg-slate-50 dark:bg-slate-800 border border-slate-200 dark:border-slate-700 rounded-lg text-xs font-semibold text-slate-700 dark:text-slate-200 focus:outline-none focus:ring-1 focus:ring-indigo-500 cursor-pointer"
             >
-              <option value="all">All Categories</option>
-              <option value="Laptop">Laptop</option>
-              <option value="Monitor">Monitor</option>
-              <option value="Phone">Phone</option>
-              <option value="Network Equipment">Network Equipment</option>
-              <option value="Other">Other</option>
+              <option value="">All Categories</option>
+              {filterCategories.map(name => <option key={name}>{name}</option>)}
             </select>
 
             <select
               value={ownershipFilter}
               onChange={(e) => setOwnershipFilter(e.target.value)}
-              className="px-3 py-2 bg-slate-50 dark:bg-slate-800 border border-slate-200 dark:border-slate-700 rounded-lg text-xs font-semibold text-slate-700 dark:text-slate-200 focus:outline-none focus:ring-1 focus:ring-indigo-500 cursor-pointer"
+              className="min-w-0 px-3 py-2 bg-slate-50 dark:bg-slate-800 border border-slate-200 dark:border-slate-700 rounded-lg text-xs font-semibold text-slate-700 dark:text-slate-200 focus:outline-none focus:ring-1 focus:ring-indigo-500 cursor-pointer"
             >
               <option value="all">All Ownership</option>
               <option value="Company-owned">Company-owned</option>
@@ -626,7 +638,7 @@ export default function CompanyAssets({
             <select
               value={statusFilter}
               onChange={(e) => setStatusFilter(e.target.value)}
-              className="px-3 py-2 bg-slate-50 dark:bg-slate-800 border border-slate-200 dark:border-slate-700 rounded-lg text-xs font-semibold text-slate-700 dark:text-slate-200 focus:outline-none focus:ring-1 focus:ring-indigo-500 cursor-pointer"
+              className="min-w-0 px-3 py-2 bg-slate-50 dark:bg-slate-800 border border-slate-200 dark:border-slate-700 rounded-lg text-xs font-semibold text-slate-700 dark:text-slate-200 focus:outline-none focus:ring-1 focus:ring-indigo-500 cursor-pointer"
             >
               <option value="all">All Statuses</option>
               <option value="Available">Available</option>
@@ -640,7 +652,7 @@ export default function CompanyAssets({
               <select
                 value={employeeFilter}
                 onChange={(e) => setEmployeeFilter(e.target.value)}
-                className="px-3 py-2 bg-slate-50 dark:bg-slate-800 border border-slate-200 dark:border-slate-700 rounded-lg text-xs font-semibold text-slate-700 dark:text-slate-200 focus:outline-none focus:ring-1 focus:ring-indigo-500 cursor-pointer"
+                className="min-w-0 px-3 py-2 bg-slate-50 dark:bg-slate-800 border border-slate-200 dark:border-slate-700 rounded-lg text-xs font-semibold text-slate-700 dark:text-slate-200 focus:outline-none focus:ring-1 focus:ring-indigo-500 cursor-pointer"
               >
                 <option value="all">All Employees</option>
                 <option value="unassigned">Unassigned Only</option>
@@ -673,9 +685,26 @@ export default function CompanyAssets({
 
       {/* Main Assets Table */}
       <div className="bg-white dark:bg-slate-900 rounded-xl border border-slate-200/70 dark:border-slate-800 shadow-2xs overflow-hidden">
-        <div className="overflow-x-auto">
+        {!loadingAssets && filteredAssets.length > 0 && (
+          <div className="grid gap-3 p-3 md:grid-cols-2 xl:hidden">
+            {filteredAssets.map(asset => <article key={asset.id} className="min-w-0 rounded-xl border border-slate-200 p-4 dark:border-slate-700">
+              <div className="flex items-start justify-between gap-3">
+                <div className="min-w-0"><span className="break-all font-mono text-xs text-indigo-600 dark:text-indigo-300">{asset.assetCode}</span>
+                  <h3 className="break-words font-semibold">{asset.assetName}</h3></div>
+                <span className="shrink-0 rounded-md bg-slate-100 px-2 py-1 text-xs dark:bg-slate-800">{asset.status}</span>
+              </div>
+              <p className="mt-2 break-words text-sm">{[asset.category, asset.location, asset.assignedEmployeeName].filter(Boolean).join(" · ")}</p>
+              <div className="mt-3 flex flex-wrap gap-2">
+                <button type="button" className="rounded-lg border px-3 py-2 text-sm" onClick={() => {setSelectedAssetId(asset.id); setDetailsTab("overview");}}>View details</button>
+                {isAdmin && <button type="button" className="rounded-lg bg-rose-700 px-3 py-2 text-sm font-semibold text-white" onClick={() => setRetireOrDeleteTarget({asset, mode: "delete"})}>Delete</button>}
+              </div>
+            </article>)}
+          </div>
+        )}
+        <div className={filteredAssets.length && !loadingAssets ? "hidden overflow-x-auto xl:block" : "overflow-x-auto"}>
+
           <table className="w-full text-left border-collapse">
-            <thead>
+            <thead className="hidden xl:table-header-group">
               <tr className="bg-slate-50 dark:bg-slate-800/80 border-b border-slate-200 dark:border-slate-800 text-xs font-semibold text-slate-500 dark:text-slate-400">
                 <th className="py-3.5 px-5">Asset Code</th>
                 <th className="py-3.5 px-5">Asset Name</th>
@@ -760,7 +789,7 @@ export default function CompanyAssets({
                     rentalAlert.level === "overdue" ||
                     rentalAlert.level === "due-today" ||
                     rentalAlert.level === "due-soon";
-                  const rowDeleteReason = assetDeleteRestriction(asset, historyIds.has(asset.id));
+
                   const isSelected = selectedAssetId === asset.id;
 
                   return (
@@ -971,10 +1000,10 @@ export default function CompanyAssets({
                             >
                               <Edit2 className="w-3.5 h-3.5" />
                             </button>
-                            <button type="button" disabled={!!rowDeleteReason}
-                              title={rowDeleteReason || "Delete asset"} aria-label={`Delete ${asset.assetCode}`}
+                            <button type="button"
+                              title="Delete asset" aria-label={`Delete ${asset.assetCode}`}
                               onClick={() => setRetireOrDeleteTarget({ asset, mode: "delete" })}
-                              className="rounded-md px-2 py-1 text-xs font-semibold text-rose-700 dark:text-rose-300 disabled:opacity-40">
+                              className="rounded-md bg-rose-700 px-3 py-1.5 text-xs font-semibold text-white hover:bg-rose-800">
                               Delete
                             </button>
                           </div>
@@ -1094,14 +1123,13 @@ export default function CompanyAssets({
                       onClick={() =>
                         setRetireOrDeleteTarget({ asset: selectedAsset, mode: "delete" })
                       }
-                      className="inline-flex items-center gap-1.5 px-3 py-1.5 text-rose-600 dark:text-rose-400 hover:bg-rose-50 dark:hover:bg-rose-950/40 rounded-lg text-xs font-semibold cursor-pointer ml-auto"
-                      disabled={!!deleteReason}
-                      title={deleteReason || "Delete asset"}
+                      className="inline-flex items-center gap-1.5 px-3 py-1.5 bg-rose-700 text-white hover:bg-rose-800 rounded-lg text-xs font-semibold cursor-pointer ml-auto"
+                      title="Delete asset"
                     >
                       <Trash2 className="w-3.5 h-3.5" />
                       Delete
                     </button>
-                {deleteReason && <p className="w-full text-xs text-slate-500">{deleteReason}</p>}
+
               </div>
             )}
 
@@ -1447,7 +1475,7 @@ export default function CompanyAssets({
                                 : "text-emerald-600 dark:text-emerald-400"
                             }`}
                           >
-                            {asgn.status === "Active" ? "Currently Assigned" : "Returned"}
+                            {asgn.status === "Active" ? "Currently Assigned" : asgn.status}
                           </span>
                         </div>
 
@@ -1551,6 +1579,7 @@ export default function CompanyAssets({
 
       {/* Shared Modals */}
       <AssetFormModal
+        categories={categories}
         isOpen={isAssetFormOpen}
         onClose={() => {
           setIsAssetFormOpen(false);
@@ -1596,15 +1625,10 @@ export default function CompanyAssets({
         mode={retireOrDeleteTarget?.mode || "retire"}
         onClose={() => setRetireOrDeleteTarget(null)}
         asset={retireOrDeleteTarget?.asset || null}
-        hasHistory={
-          retireOrDeleteTarget
-            ? assignments.some((a) => a.assetId === retireOrDeleteTarget.asset.id)
-            : false
-        }
         onRetire={onRetireAsset}
-        onDelete={async (id) => {
-          await onDeleteAsset(id);
-          if (selectedAssetId === id) setSelectedAssetId(null);
+        onDelete={async (asset) => {
+          await onDeleteAsset(asset);
+          if (selectedAssetId === asset.id) setSelectedAssetId(null);
         }}
       />
     </div>

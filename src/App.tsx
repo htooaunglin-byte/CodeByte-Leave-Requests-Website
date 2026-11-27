@@ -604,10 +604,10 @@ export default function App() {
     showToast(`Asset retired from active inventory.`, "info");
   };
 
-  const handleDeleteAsset = async (assetId: string) => {
-    if (!user) return;
-    await assetService.deleteAsset(assetId, user.email);
-    showToast(`Asset permanently deleted.`, "success");
+  const handleDeleteAsset = async (asset: CompanyAsset) => {
+    if (!user) throw new Error("Admin sign-in required.");
+    await assetService.deleteAsset(asset, user);
+    showToast(`Asset removed from inventory.`, "success");
   };
 
   // Notifications Builder

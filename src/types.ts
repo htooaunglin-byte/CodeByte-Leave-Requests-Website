@@ -46,15 +46,8 @@ export function towerLocation(value?: string) {
   return assetLocations.find(tower => tower.toLowerCase() === value?.trim().toLowerCase());
 }
 
-export function assetDeleteRestriction(asset: CompanyAsset, hasHistory: boolean) {
-  if (asset.status === "Assigned" || asset.activeAssignmentId) return "Return this asset before retiring it.";
-  if (hasHistory || asset.hasAssignmentHistory) return asset.status === "Retired"
-    ? "This retired asset keeps its assignment history."
-    : "Use Retire to preserve this asset’s assignment history.";
-  return "";
-}
-
-export type AssetCategory = "Laptop" | "Monitor" | "Phone" | "Network Equipment" | "Other";
+export const defaultAssetCategories = ["Laptop", "Monitor", "Phone", "Network Equipment", "Other"];
+export type AssetCategory = string;
 export type AssetOwnership = "Company-owned" | "Rented";
 export type AssetStatus = "Available" | "Assigned" | "Under Maintenance" | "Returned to Supplier" | "Retired";
 export type AssetCondition = "Good" | "Fair" | "Damaged";
@@ -114,7 +107,7 @@ export interface AssetAssignment {
   employeeName: string;
   employeeEmail: string;
   employeeDeactivated?: boolean;
-  status: "Active" | "Returned";
+  status: "Active" | "Returned" | "Asset removed";
 
   // Handover fields
   assignedDate: string; // YYYY-MM-DD
@@ -139,6 +132,7 @@ export interface AssetAssignment {
 }
 
 export type AssetLogAction =
+  | "REMOVED"
   | "CREATED"
   | "EDITED"
   | "ASSIGNED"

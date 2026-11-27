@@ -1,6 +1,6 @@
 import { useState, useEffect, FormEvent } from "react";
 import {
-  assetLocations, towerLocation, assetDeleteRestriction,
+  assetLocations, towerLocation,
   CompanyAsset,
   AssetAssignment,
   AssetCategory,
@@ -26,7 +26,6 @@ import {
   Package,
 } from "lucide-react";
 
-const CATEGORIES: AssetCategory[] = ["Laptop", "Monitor", "Phone", "Network Equipment", "Other"];
 const CONDITIONS: AssetCondition[] = ["Good", "Fair", "Damaged"];
 const QUICK_ACCESSORIES = ["Charger", "Laptop Bag", "Mouse", "USB-C Hub", "Power Cable", "HDMI Cable"];
 
@@ -39,6 +38,7 @@ function getTodayStr(): string {
 // 1. ADD / EDIT ASSET MODAL
 // ============================================================================
 interface AssetFormModalProps {
+  categories: string[];
   isOpen: boolean;
   onClose: () => void;
   editingAsset: CompanyAsset | null;
@@ -47,6 +47,7 @@ interface AssetFormModalProps {
 }
 
 export function AssetFormModal({
+  categories,
   isOpen,
   onClose,
   editingAsset,
@@ -106,7 +107,7 @@ export function AssetFormModal({
     } else {
       setAssetCode("");
       setAssetName("");
-      setCategory("Laptop");
+      setCategory("");
       setBrandModel("");
       setSerialNumber("");
       setOwnershipType("Company-owned");
@@ -126,6 +127,9 @@ export function AssetFormModal({
   }, [isOpen, editingAsset]);
 
   if (!isOpen) return null;
+
+  const choices = editingAsset?.category ? [...new Set([...categories, editingAsset.category])] : categories;
+  const effectiveCategory = choices.includes(category) ? category : choices[0] || "";
 
   const handleAddAccessory = (item: string) => {
     const trimmed = item.trim();
@@ -193,7 +197,7 @@ export function AssetFormModal({
       const payload: Omit<CompanyAsset, "id" | "createdAt" | "updatedAt"> = {
         assetCode: normalizedCode,
         assetName: trimmedName,
-        category,
+        category: effectiveCategory,
         brandModel: brandModel.trim(),
         serialNumber: serialNumber.trim(),
         ownershipType,
@@ -285,11 +289,12 @@ export function AssetFormModal({
                 Category <span className="text-rose-500">*</span>
               </label>
               <select
-                value={category}
+                required value={effectiveCategory}
                 onChange={(e) => setCategory(e.target.value as AssetCategory)}
                 className="w-full px-3 py-2 border border-slate-200 dark:border-slate-700 rounded-lg text-sm text-slate-900 dark:text-white bg-slate-50/50 dark:bg-slate-800/60 focus:outline-none focus:ring-2 focus:ring-indigo-500/30 focus:border-indigo-500 cursor-pointer"
               >
-                {CATEGORIES.map((c) => (
+                {choices.length === 0 && <option value="">Add a category first</option>}
+                {choices.map((c) => (
                   <option key={c} value={c}>
                     {c}
                   </option>
@@ -1430,9 +1435,9 @@ interface RetireOrDeleteModalProps {
   mode: "retire" | "delete";
   onClose: () => void;
   asset: CompanyAsset | null;
-  hasHistory: boolean;
+
   onRetire: (assetId: string, reason: string) => Promise<void>;
-  onDelete: (assetId: string) => Promise<void>;
+  onDelete: (asset: CompanyAsset) => Promise<void>;
 }
 
 export function RetireOrDeleteModal({
@@ -1440,7 +1445,7 @@ export function RetireOrDeleteModal({
   mode,
   onClose,
   asset,
-  hasHistory,
+
   onRetire,
   onDelete,
 }: RetireOrDeleteModalProps) {
@@ -1456,15 +1461,12 @@ export function RetireOrDeleteModal({
 
   if (!isOpen || !asset) return null;
 
-  const canDelete = !assetDeleteRestriction(asset, hasHistory);
-
   const handleConfirm = async () => {
     setError(null);
     setSubmitting(true);
     try {
       if (mode === "delete") {
-        if (!canDelete) throw new Error(assetDeleteRestriction(asset, hasHistory));
-        await onDelete(asset.id);
+        await onDelete(asset);
       } else {
         await onRetire(asset.id, reason.trim());
       }
@@ -1496,14 +1498,14 @@ export function RetireOrDeleteModal({
           <div>
             <h3 className="text-base font-bold text-slate-900 dark:text-white">
               {mode === "delete"
-                ? "Permanently Delete Asset?"
+                ? "Delete asset from inventory?"
                 : "Retire Asset from Active Inventory?"}
             </h3>
             <p className="text-xs text-slate-500 dark:text-slate-400 mt-1">
-              {mode === "delete" && !canDelete
-                ? assetDeleteRestriction(asset, hasHistory)
-                : mode === "delete"
-                ? "Only mistakenly created assets with zero assignment history can be deleted. This cannot be undone."
+              {mode === "delete"
+                ? (asset.status === "Assigned" || asset.activeAssignmentId
+                  ? `This closes the assignment to ${asset.assignedEmployeeName || "the current employee"} and removes the asset. No equipment return is recorded.`
+                  : "This removes the asset from inventory. Its assignment and activity records are kept.")
                 : "Retiring marks this equipment as decommissioned while preserving its full assignment & audit history."}
             </p>
           </div>
@@ -1547,7 +1549,7 @@ export function RetireOrDeleteModal({
           </button>
           <button
             type="button"
-            disabled={submitting || (mode === "delete" && !canDelete)}
+            disabled={submitting}
             onClick={handleConfirm}
             className={`px-4 py-2 text-white rounded-lg text-xs font-semibold shadow-sm cursor-pointer disabled:opacity-50 ${
               mode === "delete"
@@ -1558,7 +1560,7 @@ export function RetireOrDeleteModal({
             {submitting
               ? "Processing..."
               : mode === "delete"
-              ? "Confirm Permanent Delete"
+              ? "Delete asset"
               : "Retire Asset"}
           </button>
         </div>

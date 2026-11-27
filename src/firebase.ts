@@ -25,6 +25,7 @@ import {
   TeamMember, 
   LeaveRequest, 
   AdminUser,
+  defaultAssetCategories,
   CompanyAsset,
   AssetAssignment,
   AssetActivityLog,
@@ -421,6 +422,28 @@ const ASSETS_COLL = "assets";
 const ASSET_ASSIGNMENTS_COLL = "asset_assignments";
 const ASSET_LOGS_COLL = "asset_logs";
 
+export function subscribeCategories(next: (names: string[]) => void, error: (err: Error) => void) {
+  if (!db) { error(new Error("Database unavailable")); return () => {}; }
+  return onSnapshot(doc(db, "asset_settings", "categories"), snap => {
+    next(snap.exists() ? snap.data().names : defaultAssetCategories);
+  }, error);
+}
+
+export async function changeCategory(input: string, remove: boolean) {
+  if (!db) throw new Error("Database unavailable");
+  const name = input.trim();
+  if (!name || name.length > 64) throw new Error("Enter a category name of 1–64 characters.");
+  const ref = doc(db, "asset_settings", "categories");
+  await runTransaction(db, async tx => {
+    const snap = await tx.get(ref);
+    const names: string[] = snap.exists() ? snap.data().names : defaultAssetCategories;
+    const found = names.find(value => value.toLowerCase() === name.toLowerCase());
+    if (!remove && found) throw new Error("That category already exists.");
+    if (!remove && names.length >= 200) throw new Error("The category list is full (200).");
+    tx.set(ref, {names: remove ? names.filter(value => value !== found) : [...names, name]});
+  });
+}
+
 export const assetService = {
   // Real-time subscription to assets (Admin sees all; employee sees their own assigned assets)
   subscribeAssets: (
@@ -443,7 +466,7 @@ export const assetService = {
       (snapshot) => {
         const list: CompanyAsset[] = [];
         snapshot.forEach((d) => {
-          list.push({ id: d.id, ...d.data() } as CompanyAsset);
+          if (!d.data().deletedAt) list.push({ id: d.id, ...d.data() } as CompanyAsset);
         });
         list.sort((a, b) => (a.assetCode || "").localeCompare(b.assetCode || "", undefined, { numeric: true }));
         onUpdate(list);
@@ -538,7 +561,7 @@ export const assetService = {
     const inventory = collection(db, ASSETS_COLL);
     const logs = collection(db, ASSET_LOGS_COLL);
     const existing = await getDocs(inventory);
-    const codes = new Set(existing.docs.map(d => String(d.data().assetCode).trim().toUpperCase()));
+    const codes = new Set(existing.docs.filter(d => !d.data().deletedAt).map(d => String(d.data().assetCode).trim().toUpperCase()));
     const occupied = new Set(existing.docs.map(d => d.id));
     const entries = payloads.map(payload => {
       const normalizedCode = payload.assetCode.trim().toUpperCase();
@@ -607,7 +630,7 @@ export const assetService = {
       const existingSnap = await getDocs(query(collection(db, ASSETS_COLL)));
       let duplicate = false;
       existingSnap.forEach((d) => {
-        if (d.id !== assetId) {
+        if (d.id !== assetId && !d.data().deletedAt) {
           const data = d.data();
           if ((data.assetCode || "").trim().toUpperCase() === normalizedCode) {
             duplicate = true;
@@ -947,36 +970,37 @@ export const assetService = {
   },
 
   // Permanent deletion ONLY allowed for mistakenly created assets with NO assignment history
-  deleteAsset: async (assetId: string, actorEmail?: string) => {
-    if (!db) throw new Error("Database not initialized");
-    if (actorEmail) {
-      const isAuthorized = await adminService.checkIsAdmin(actorEmail);
-      if (!isAuthorized) {
-        throw new Error("Permission denied: Only authorized administrators can delete company assets.");
-      }
-    }
+  deleteAsset: async (reviewed: CompanyAsset, actor: {email: string; name: string}) => {
+    if (!db) throw new Error("Database unavailable");
+    const assetId = reviewed.id;
     const assetRef = doc(db, ASSETS_COLL, assetId);
-    const assetSnap = await getDoc(assetRef);
-    if (!assetSnap.exists()) throw new Error("Asset not found.");
-    const asset = assetSnap.data() as CompanyAsset;
-
-    if (asset.status === "Assigned" || asset.activeAssignmentId || asset.hasAssignmentHistory) {
-      throw new Error("Assets with assignment history cannot be permanently deleted. Please retire the asset instead to preserve historical records.");
-    }
-
-    // Double check assignment collection
-    const assignSnap = await getDocs(
-      query(collection(db, ASSET_ASSIGNMENTS_COLL), where("assetId", "==", assetId))
-    );
-    if (!assignSnap.empty) {
-      throw new Error("This asset has historical assignment records and cannot be permanently deleted. Please retire it instead.");
-    }
-
-    try {
-      await deleteDoc(assetRef);
-    } catch (err) {
-      handleFirestoreError(err, OperationType.DELETE, `${ASSETS_COLL}/${assetId}`);
-    }
+    const log = doc(collection(db, ASSET_LOGS_COLL));
+    const records = collection(db, ASSET_ASSIGNMENTS_COLL);
+    // Older assignments may lack the active-assignment pointer on the asset.
+    const history = await getDocs(query(records, where("assetId", "==", assetId)));
+    const activeIds = history.docs.filter(d => d.data().status === "Active").map(d => d.id);
+    await runTransaction(db, async tx => {
+      const snap = await tx.get(assetRef);
+      if (!snap.exists() || snap.data().deletedAt) throw new Error("This asset has already been removed.");
+      const asset = snap.data() as CompanyAsset;
+      if (asset.status !== reviewed.status || asset.activeAssignmentId !== reviewed.activeAssignmentId ||
+          asset.assignedEmployeeId !== reviewed.assignedEmployeeId || asset.assetCode !== reviewed.assetCode) {
+        throw new Error("This asset changed. Close this dialog and review it again before deleting.");
+      }
+      const ids = new Set(activeIds);
+      if (asset.activeAssignmentId) ids.add(asset.activeAssignmentId);
+      const assignments = await Promise.all([...ids].map(id => tx.get(doc(records, id))));
+      for (const record of assignments) {
+        if (record.exists() && record.data().assetId === assetId && record.data().status === "Active") {
+          tx.update(record.ref, {status: "Asset removed", updatedAt: serverTimestamp()});
+        }
+      }
+      tx.update(assetRef, {deletedAt: serverTimestamp(), deletedByEmail: actor.email, status: "Retired",
+        activeAssignmentId: null, assignedEmployeeEmail: null, assignedEmployeeName: null,
+        assignedEmployeeId: null, assignedDate: null, updatedAt: serverTimestamp()});
+      tx.set(log, {assetId, assetCode: asset.assetCode, assetName: asset.assetName, action: "REMOVED",
+        summary: "Removed from inventory", actorName: actor.name, actorEmail: actor.email, createdAt: serverTimestamp()});
+    });
   },
 
   // Flag active assignments & assets when an employee is deactivated or removed while holding equipment
