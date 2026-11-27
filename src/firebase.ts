@@ -520,72 +520,73 @@ export const assetService = {
     );
   },
 
-  // Create a new asset with uniqueness check on assetCode
   createAsset: async (
     payload: Omit<CompanyAsset, "id" | "createdAt" | "updatedAt">,
     actor: { email: string; name: string }
-  ) => {
+  ) => (await assetService.createAssets([payload], actor))[0],
+
+  createAssets: async (
+    payloads: Omit<CompanyAsset, "id" | "createdAt" | "updatedAt">[],
+    actor: { email: string; name: string }
+  ): Promise<string[]> => {
     if (!db) throw new Error("Database not initialized");
     const isAuthorized = await adminService.checkIsAdmin(actor.email);
     if (!isAuthorized) {
       throw new Error("Permission denied: Only authorized administrators can create company assets.");
     }
-    const normalizedCode = payload.assetCode.trim().toUpperCase();
-    if (!normalizedCode) throw new Error("Asset code is required.");
+    if (!payloads.length || payloads.length > 200) throw new Error("Import 1–200 assets per file.");
+    const inventory = collection(db, ASSETS_COLL);
+    const logs = collection(db, ASSET_LOGS_COLL);
+    const existing = await getDocs(inventory);
+    const codes = new Set(existing.docs.map(d => String(d.data().assetCode).trim().toUpperCase()));
+    const occupied = new Set(existing.docs.map(d => d.id));
+    const entries = payloads.map(payload => {
+      const normalizedCode = payload.assetCode.trim().toUpperCase();
+      if (!normalizedCode || codes.has(normalizedCode)) throw new Error(`Missing or duplicate asset code: ${normalizedCode}`);
+      codes.add(normalizedCode);
+      // Concurrent creates of the same code must contend on the same document.
+      const base = "code-" + encodeURIComponent(normalizedCode);
+      let id = base;
+      for (let n = 1; occupied.has(id); n++) id = base + ":" + n;
+      return {payload, normalizedCode, assetRef: doc(inventory, id), logRef: doc(logs)};
+    });
+    await runTransaction(db, async transaction => {
+      const snapshots = await Promise.all(entries.map(entry => transaction.get(entry.assetRef)));
+      if (snapshots.some(snap => snap.exists())) throw new Error("Inventory changed. Review the CSV again.");
+      for (const {payload, normalizedCode, assetRef, logRef} of entries) {
+        const cleaned = sanitizeForFirestore({
+          ...payload,
+          assetCode: normalizedCode,
+          assetName: payload.assetName.trim(),
+          hasAssignmentHistory: false,
+          activeAssignmentId: null,
+          assignedEmployeeId: null,
+          assignedEmployeeName: null,
+          assignedEmployeeEmail: null,
+          assignedDate: null,
+          createdByEmail: actor.email.toLowerCase().trim(),
+          createdByName: actor.name,
+          updatedByEmail: actor.email.toLowerCase().trim(),
+          updatedByName: actor.name,
+          createdAt: serverTimestamp(),
+          updatedAt: serverTimestamp(),
+        });
 
-    // Check uniqueness
-    const existingSnap = await getDocs(query(collection(db, ASSETS_COLL)));
-    let duplicate = false;
-    existingSnap.forEach((d) => {
-      const data = d.data();
-      if ((data.assetCode || "").trim().toUpperCase() === normalizedCode) {
-        duplicate = true;
+        transaction.set(assetRef, cleaned);
+        transaction.set(logRef, {
+          assetId: assetRef.id,
+          assetCode: normalizedCode,
+          assetName: payload.assetName.trim(),
+          action: "CREATED",
+          summary: `Created ${payload.ownershipType.toLowerCase()} ${payload.category.toLowerCase()} asset (${payload.condition} condition).`,
+          actorEmail: actor.email.toLowerCase().trim(),
+          actorName: actor.name,
+          createdAt: serverTimestamp(),
+        });
+
       }
     });
-    if (duplicate) {
-      throw new Error(`Asset code "${normalizedCode}" already exists. Asset codes must be unique.`);
-    }
-
-    const batch = writeBatch(db);
-    const assetRef = doc(collection(db, ASSETS_COLL));
-    const logRef = doc(collection(db, ASSET_LOGS_COLL));
-
-    const cleaned = sanitizeForFirestore({
-      ...payload,
-      assetCode: normalizedCode,
-      assetName: payload.assetName.trim(),
-      hasAssignmentHistory: false,
-      activeAssignmentId: null,
-      assignedEmployeeId: null,
-      assignedEmployeeName: null,
-      assignedEmployeeEmail: null,
-      assignedDate: null,
-      createdByEmail: actor.email.toLowerCase().trim(),
-      createdByName: actor.name,
-      updatedByEmail: actor.email.toLowerCase().trim(),
-      updatedByName: actor.name,
-      createdAt: serverTimestamp(),
-      updatedAt: serverTimestamp(),
-    });
-
-    batch.set(assetRef, cleaned);
-    batch.set(logRef, {
-      assetId: assetRef.id,
-      assetCode: normalizedCode,
-      assetName: payload.assetName.trim(),
-      action: "CREATED",
-      summary: `Created ${payload.ownershipType.toLowerCase()} ${payload.category.toLowerCase()} asset (${payload.condition} condition).`,
-      actorEmail: actor.email.toLowerCase().trim(),
-      actorName: actor.name,
-      createdAt: serverTimestamp(),
-    });
-
-    try {
-      await batch.commit();
-      return assetRef.id;
-    } catch (err) {
-      handleFirestoreError(err, OperationType.CREATE, ASSETS_COLL);
-    }
+    return entries.map(entry => entry.assetRef.id);
   },
 
   // Edit an existing asset with uniqueness check on assetCode

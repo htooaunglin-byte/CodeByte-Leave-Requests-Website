@@ -12,6 +12,8 @@ import {
   getRentalAlertInfo,
 } from "../types";
 import {
+  Download,
+  Upload,
   Laptop,
   Monitor,
   Smartphone,
@@ -48,6 +50,7 @@ import {
   RetireOrDeleteModal,
 } from "./AssetActionModals";
 
+import AssetImport from "./AssetImport";
 import { downloadInventory } from "../utils/assetCsv";
 
 interface CompanyAssetsProps {
@@ -61,6 +64,7 @@ interface CompanyAssetsProps {
   loadingAssets: boolean;
   assetError: string | null;
   onRetry: () => void;
+  onImportAssets: (rows: import("../utils/assetCsv").NewAsset[]) => Promise<void>;
   onCreateAsset: (payload: Omit<CompanyAsset, "id" | "createdAt" | "updatedAt">) => Promise<void>;
   onUpdateAsset: (assetId: string, updates: Partial<Omit<CompanyAsset, "id" | "createdAt">>) => Promise<void>;
   onAssignAsset: (params: {
@@ -134,6 +138,7 @@ export default function CompanyAssets({
   loadingAssets,
   assetError,
   onRetry,
+  onImportAssets,
   onCreateAsset,
   onUpdateAsset,
   onAssignAsset,
@@ -201,6 +206,8 @@ export default function CompanyAssets({
     }
     return undefined;
   };
+
+  const [importOpen, setImportOpen] = useState(false);
 
   // Action Modals State
   const [isAssetFormOpen, setIsAssetFormOpen] = useState(false);
@@ -390,11 +397,16 @@ export default function CompanyAssets({
         </div>
 
         {isAdmin ? (
-          <div className="flex flex-wrap gap-2">
-          <button type="button" disabled={loadingAssets || filteredAssets.length === 0}
+          <div className="flex flex-wrap items-center gap-2 sm:justify-end">
+          <button type="button" disabled={loadingAssets || (assets.length > 0 && !filteredAssets.length)}
             onClick={() => downloadInventory(filteredAssets)}
-            className="rounded-lg border border-slate-300 dark:border-slate-600 px-4 py-2 text-sm font-semibold disabled:opacity-50">
-            Export CSV ({filteredAssets.length})
+            className="inline-flex items-center gap-2 whitespace-nowrap rounded-lg bg-emerald-700 px-4 py-2.5 text-sm font-semibold text-white shadow-sm hover:bg-emerald-800 focus-visible:outline-2 focus-visible:outline-offset-2 disabled:cursor-not-allowed disabled:bg-slate-500">
+            <Download size={16} aria-hidden="true" />
+            {loadingAssets ? "Loading assets…" : !assets.length ? "Export CSV template" : !filteredAssets.length ? "No matches to export" : `Export CSV (${filteredAssets.length})`}
+          </button>
+          <button type="button" disabled={loadingAssets} onClick={() => setImportOpen(true)}
+            className="inline-flex items-center gap-2 whitespace-nowrap rounded-lg border border-indigo-400 px-4 py-2.5 text-sm font-semibold text-indigo-700 dark:text-indigo-300 hover:bg-indigo-50 dark:hover:bg-slate-800 disabled:opacity-50">
+            <Upload size={16} aria-hidden="true"/> Import CSV
           </button>
           <button
             type="button"
@@ -415,6 +427,8 @@ export default function CompanyAssets({
           </div>
         )}
       </div>
+
+      {isAdmin && importOpen && <AssetImport assets={assets} close={() => setImportOpen(false)} save={onImportAssets} />}
 
       {/* Summary Cards */}
       <div className="grid grid-cols-2 lg:grid-cols-4 gap-4">

@@ -1268,6 +1268,11 @@ export default function App() {
             assetError={assetError}
             onRetry={() => setAssetRetry(n => n + 1)}
             loadingAssets={loadingAssets}
+            onImportAssets={async rows => {
+              if (!user || !isAdmin) throw new Error("Admin sign-in required.");
+              await assetService.createAssets(rows, user);
+              showToast(`Imported ${rows.length} company asset${rows.length === 1 ? "" : "s"}.`, "success");
+            }}
             onCreateAsset={handleCreateAsset}
             onUpdateAsset={handleUpdateAsset}
             onAssignAsset={handleAssignAsset}
