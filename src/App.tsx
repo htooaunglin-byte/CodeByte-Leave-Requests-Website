@@ -102,6 +102,9 @@ export default function App() {
   const [loadingLeaves, setLoadingLeaves] = useState<boolean>(true);
   const [loadingAssets, setLoadingAssets] = useState<boolean>(true);
   
+  const [assetError, setAssetError] = useState<string | null>(null);
+  const [assetRetry, setAssetRetry] = useState(0);
+
   // Connection Status (Firestore Live vs. LocalStorage Fallback)
   const [isLive, setIsLive] = useState<boolean>(false);
   const [dbError, setDbError] = useState<string | null>(null);
@@ -411,20 +414,23 @@ export default function App() {
 
   // Subscribe to Company Assets, Assignments & Audit Logs
   useEffect(() => {
-    if (!user?.email) {
-      setAssets([]);
-      setAssetAssignments([]);
-      setAssetLogs([]);
-      setLoadingAssets(false);
-      return;
-    }
-
-    if (!db) {
+    setAssets([]);
+    setAssetAssignments([]);
+    setAssetLogs([]);
+    setAssetError(null);
+    if (!user?.email || !db) {
+      if (!db) setAssetError("Firestore is unavailable.");
       setLoadingAssets(false);
       return;
     }
 
     setLoadingAssets(true);
+    function reportError(section: string, error: { code?: string }) {
+      const guidance = error.code === "permission-denied"
+        ? "Check that you are signed in with your CodeByte account and that the asset rules are published."
+        : "Check your connection and try again.";
+      setAssetError(`Could not load ${section}. ${guidance}`);
+    }
 
     const unsubAssets = assetService.subscribeAssets(
       isAdmin,
@@ -434,7 +440,7 @@ export default function App() {
         setLoadingAssets(false);
       },
       (err) => {
-        console.warn("Assets subscription error:", err);
+        reportError("inventory", err);
         setLoadingAssets(false);
       }
     );
@@ -446,7 +452,7 @@ export default function App() {
         setAssetAssignments(fetchedAssignments);
       },
       (err) => {
-        console.warn("Asset assignments subscription error:", err);
+        reportError("assignment history", err);
       }
     );
 
@@ -456,7 +462,7 @@ export default function App() {
         setAssetLogs(fetchedLogs);
       },
       (err) => {
-        console.warn("Asset logs subscription error:", err);
+        reportError("activity logs", err);
       }
     );
 
@@ -465,7 +471,7 @@ export default function App() {
       unsubAssignments();
       unsubLogs();
     };
-  }, [isAdmin, user?.email]);
+  }, [isAdmin, user?.email, assetRetry]);
 
   // Auth actions
   const handleLoginSuccess = (email: string, name: string) => {
@@ -1259,6 +1265,8 @@ export default function App() {
             assignments={assetAssignments}
             assetLogs={assetLogs}
             teamMembers={teamMembers}
+            assetError={assetError}
+            onRetry={() => setAssetRetry(n => n + 1)}
             loadingAssets={loadingAssets}
             onCreateAsset={handleCreateAsset}
             onUpdateAsset={handleUpdateAsset}

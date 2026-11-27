@@ -249,7 +249,7 @@ function sanitizeForFirestore<T>(data: T): any {
       .filter(item => item !== undefined)
       .map(item => sanitizeForFirestore(item));
   }
-  if (typeof data === "object" && !(data instanceof Date)) {
+  if (typeof data === "object" && Object.getPrototypeOf(data) === Object.prototype) {
     const cleaned: Record<string, any> = {};
     for (const [key, val] of Object.entries(data)) {
       if (val !== undefined) {

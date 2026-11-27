@@ -48,6 +48,8 @@ import {
   RetireOrDeleteModal,
 } from "./AssetActionModals";
 
+import { downloadInventory } from "../utils/assetCsv";
+
 interface CompanyAssetsProps {
   user: { email: string; name: string };
   isAdmin: boolean;
@@ -57,6 +59,8 @@ interface CompanyAssetsProps {
   assetLogs: AssetActivityLog[];
   teamMembers: TeamMember[];
   loadingAssets: boolean;
+  assetError: string | null;
+  onRetry: () => void;
   onCreateAsset: (payload: Omit<CompanyAsset, "id" | "createdAt" | "updatedAt">) => Promise<void>;
   onUpdateAsset: (assetId: string, updates: Partial<Omit<CompanyAsset, "id" | "createdAt">>) => Promise<void>;
   onAssignAsset: (params: {
@@ -128,6 +132,8 @@ export default function CompanyAssets({
   assetLogs,
   teamMembers,
   loadingAssets,
+  assetError,
+  onRetry,
   onCreateAsset,
   onUpdateAsset,
   onAssignAsset,
@@ -358,6 +364,16 @@ export default function CompanyAssets({
     statusFilter !== "all" ||
     employeeFilter !== "all";
 
+  if (assetError) {
+    return (
+      <section className="p-6 space-y-3" role="alert">
+        <h1 className="text-2xl font-bold">{isAdmin ? "Company Assets" : "My Assigned Assets"}</h1>
+        <p>{assetError}</p>
+        <button type="button" className="rounded-lg px-4 py-2 bg-indigo-600 text-white" onClick={onRetry}>Retry</button>
+      </section>
+    );
+  }
+
   return (
     <div className="p-4 sm:p-6 md:p-8 space-y-6 flex-1 max-w-7xl mx-auto w-full">
       {/* Page Header */}
@@ -374,6 +390,12 @@ export default function CompanyAssets({
         </div>
 
         {isAdmin ? (
+          <div className="flex flex-wrap gap-2">
+          <button type="button" disabled={loadingAssets || filteredAssets.length === 0}
+            onClick={() => downloadInventory(filteredAssets)}
+            className="rounded-lg border border-slate-300 dark:border-slate-600 px-4 py-2 text-sm font-semibold disabled:opacity-50">
+            Export CSV ({filteredAssets.length})
+          </button>
           <button
             type="button"
             onClick={() => {
@@ -385,6 +407,7 @@ export default function CompanyAssets({
             <Plus className="w-4 h-4" />
             Add Asset
           </button>
+          </div>
         ) : (
           <div className="inline-flex items-center gap-1.5 px-3.5 py-2 bg-slate-100 dark:bg-slate-800 text-slate-700 dark:text-slate-300 border border-slate-200 dark:border-slate-700 rounded-xl text-xs font-semibold">
             <ShieldAlert className="w-4 h-4 text-indigo-600 dark:text-indigo-400" />
